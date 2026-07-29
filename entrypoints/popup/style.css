@@ -1,0 +1,260 @@
+/* Palette taken from the legacy xBrowserSync client
+   (src/styles/modules/_colors-default.scss and _colors-dark.scss). */
+:root {
+  --bg: #edfeff;
+  --surface: #ffffff;
+  --text: #083039;
+  --muted: #75959c;
+  --accent: #01ab8a;
+  --accent-2: #35c6e8;
+  --on-accent: #edfeff;
+  --success: #30d278;
+  --danger: #ea3869;
+  --border: color-mix(in srgb, var(--text) 15%, transparent);
+}
+
+/* Dark palette: applied automatically with the system preference, or explicitly
+   via [data-theme]. The light/dark attributes let the popup override the system. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1e2228;
+    --surface: #2d333b;
+    --text: #cdd9e5;
+    --muted: #8a96a3;
+    --on-accent: #edfeff;
+    --border: #474f5b;
+  }
+}
+
+:root[data-theme='dark'] {
+  --bg: #1e2228;
+  --surface: #2d333b;
+  --text: #cdd9e5;
+  --muted: #8a96a3;
+  --border: #474f5b;
+}
+
+:root[data-theme='light'] {
+  --bg: #edfeff;
+  --surface: #ffffff;
+  --text: #083039;
+  --muted: #75959c;
+  --border: color-mix(in srgb, var(--text) 15%, transparent);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* Author display rules below would otherwise override the UA [hidden] style. */
+[hidden] {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  width: 340px;
+  font:
+    14px/1.45 system-ui,
+    sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+
+#app {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.app-header img {
+  display: block;
+}
+
+h1 {
+  margin: 0;
+  font-size: 16px;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+h2 {
+  margin: 0 0 2px;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+form,
+section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-weight: 600;
+}
+
+label.radio,
+label.checkbox {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  font-weight: 400;
+}
+
+input[type='url'],
+input[type='text'],
+input[type='password'],
+select {
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font: inherit;
+  background: var(--surface);
+  color: inherit;
+}
+
+input:focus-visible,
+select:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+fieldset {
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+legend {
+  font-weight: 600;
+  padding: 0 4px;
+}
+
+button {
+  padding: 9px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  color: var(--on-accent);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+button.secondary {
+  background: transparent;
+  color: inherit;
+  border: 1px solid var(--border);
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+}
+
+.actions button {
+  flex: 1;
+}
+
+.settings {
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+
+dl {
+  margin: 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 10px;
+}
+
+dt {
+  font-weight: 600;
+}
+
+dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.monospace {
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+}
+
+.qr {
+  margin: 4px 0 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+/* The QR is rendered black-on-white for reliable scanning in any theme, so it sits on
+   its own white card with a quiet border. */
+.qr-canvas {
+  background: #ffffff;
+  padding: 8px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  width: 160px;
+  height: 160px;
+}
+
+.qr-canvas svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.qr figcaption {
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+/* Build stamp: present but quiet, so it never competes with the sync controls. */
+.build-info {
+  margin: 0;
+  text-align: center;
+  color: var(--muted);
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+}
+
+.message {
+  margin: 0;
+  padding: 9px 11px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+.message.error {
+  background: color-mix(in srgb, var(--danger) 18%, transparent);
+}

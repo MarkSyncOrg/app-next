@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MarkSync</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main id="app">
+      <header class="app-header">
+        <img src="/icon/48.png" alt="" width="28" height="28" />
+        <h1>MarkSync</h1>
+      </header>
+
+      <p id="message" class="message" hidden></p>
+
+      <!-- Setup view: shown when sync is not enabled -->
+      <form id="setup" hidden>
+        <label>
+          Service URL
+          <input
+            id="service-url"
+            type="url"
+            value="https://api.xbrowsersync.org"
+            required
+            autocomplete="off"
+          />
+        </label>
+
+        <fieldset>
+          <legend>Sync</legend>
+          <label class="radio">
+            <input type="radio" name="mode" value="new" checked />
+            Create a new sync
+          </label>
+          <label class="radio">
+            <input type="radio" name="mode" value="existing" />
+            Use an existing sync ID
+          </label>
+        </fieldset>
+
+        <label id="sync-id-field" hidden>
+          Sync ID
+          <input id="sync-id" type="text" autocomplete="off" spellcheck="false" />
+        </label>
+
+        <label>
+          Password
+          <input id="password" type="password" required autocomplete="off" />
+        </label>
+
+        <button id="enable" type="submit">Enable sync</button>
+      </form>
+
+      <!-- Status view: shown when sync is enabled -->
+      <section id="status" hidden>
+        <dl>
+          <dt>Service</dt>
+          <dd id="status-service"></dd>
+          <dt>Sync ID</dt>
+          <dd id="status-sync-id" class="monospace"></dd>
+          <dt>Last updated</dt>
+          <dd id="status-last-updated"></dd>
+        </dl>
+        <button id="toggle-qr" type="button" class="secondary" aria-expanded="false">
+          Show QR code
+        </button>
+        <figure id="qr" class="qr" hidden>
+          <div id="qr-canvas" class="qr-canvas" role="img" aria-label="Sync ID QR code"></div>
+          <figcaption>Scan to copy this sync ID to another device.</figcaption>
+        </figure>
+        <div class="actions">
+          <button id="sync-now" type="button">Sync now</button>
+          <button id="disable" type="button" class="secondary">Disable</button>
+        </div>
+      </section>
+
+      <button id="open-options" type="button" class="secondary">Settings, backup &amp; logs</button>
+
+      <p id="build-info" class="build-info"></p>
+    </main>
+
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="360" height="76" viewBox="0 0 360 76">
+  <polygon points="16,0 52,0 52,58 34,44 16,58" fill="none" stroke="#4a4a3e" stroke-width="4"></polygon>
+  <polygon points="4,12 40,12 40,70 22,56 4,70" fill="#c8f542"></polygon>
+  <text x="72" y="53" font-family="Archivo, Helvetica, sans-serif" font-weight="900" font-size="40" letter-spacing="-1" fill="#f5f4ec">MarkSync</text>
+</svg>

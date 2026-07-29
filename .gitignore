@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# WXT build output
+.output/
+.wxt/
+stats.html
+web-ext.config.ts
+
+# Generated API types (produced by `npm run gen:api`, regenerated on install)
+src/types/api.d.ts
+
+# Test / coverage artifacts
+coverage/
+test-results/
+playwright-report/
+blob-report/
+.playwright/
+
+# Logs & env
+*.log
+.env
+.env.*
+!.env.example
+
+# OS / editor
+.DS_Store
+*.swp
+.idea/

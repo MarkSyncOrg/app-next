@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- Open in a full tab, not the embedded options dialog. Chrome's embedded dialog
+         suppresses window.confirm() and file downloads, silently breaking restore and
+         the force pull/push buttons. -->
+    <meta name="manifest.open_in_tab" content="true" />
+    <title>MarkSync — Settings</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main id="app">
+      <header class="app-header">
+        <img src="/icon/48.png" alt="" width="32" height="32" />
+        <h1>MarkSync</h1>
+      </header>
+
+      <p id="message" class="message" hidden></p>
+
+      <section class="card">
+        <h2>Settings</h2>
+        <label>
+          Theme
+          <select id="set-theme">
+            <option value="system">System</option>
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+          </select>
+        </label>
+        <label>
+          Auto-sync
+          <select id="set-interval">
+            <option value="0">Off</option>
+            <option value="15">Every 15 minutes</option>
+            <option value="30">Every 30 minutes</option>
+            <option value="60">Every hour</option>
+          </select>
+        </label>
+        <label class="checkbox">
+          <input type="checkbox" id="set-toolbar" />
+          Sync bookmarks toolbar
+        </label>
+        <label class="checkbox">
+          <input type="checkbox" id="set-on-change" />
+          Sync changes automatically
+        </label>
+      </section>
+
+      <section class="card">
+        <h2>Backup &amp; restore</h2>
+        <p class="hint">
+          Export your current bookmarks to an unencrypted file, or restore them from a previous
+          backup. Restoring replaces your current bookmarks.
+        </p>
+        <div class="actions">
+          <button id="export-backup" type="button">Export backup</button>
+        </div>
+        <label>
+          Restore from file
+          <input id="import-file" type="file" accept=".txt,.json,application/json" />
+        </label>
+        <div class="actions">
+          <button id="restore-backup" type="button" disabled>Restore backup</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Conflict recovery</h2>
+        <p class="hint">
+          Use these only when sync is stuck in a conflict. Force pull discards this device's
+          bookmarks and replaces them with the server copy. Force push overwrites the server with
+          this device's bookmarks. Both bypass the usual conflict check.
+        </p>
+        <div class="actions">
+          <button id="force-pull" type="button" class="secondary">Force pull from server</button>
+          <button id="force-push" type="button" class="secondary">Force push to server</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Debug log</h2>
+        <p class="hint">
+          Activity from the popup, the settings page and background sync, useful for
+          troubleshooting. The log rotates daily: the last 7 days are kept, older days are dropped
+          automatically. Passwords are never recorded, and bookmarks appear only as counts.
+        </p>
+        <pre id="log-output" class="log" aria-live="polite"></pre>
+        <div class="actions">
+          <button id="refresh-log" type="button" class="secondary">Refresh</button>
+          <button id="download-log" type="button" class="secondary">Download</button>
+          <button id="clear-log" type="button" class="secondary">Clear</button>
+        </div>
+      </section>
+
+      <p id="build-info" class="build-info"></p>
+    </main>
+
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

@@ -1,0 +1,5 @@
+extends: ['spectral:oas']
+rules:
+  # The public service has no contact/ToS metadata; don't fail on it.
+  info-contact: off
+  oas3-server-trailing-slash: off

@@ -1,0 +1,37 @@
+# pnpm settings (pnpm 11 reads project config from here, not the package.json "pnpm" field).
+
+# Pin patched versions of vulnerable transitive dev dependencies. All advisories were
+# in the wxt build-tooling chain; production deps ship clean.
+#
+# esbuild is intentionally NOT overridden: forcing it past the version vite/wxt expects
+# breaks the bundler ("transforming destructuring not supported"). Its only advisory
+# (GHSA-g7r4-m6w7-qqqr) is a low-severity, dev-server-on-Windows file read — below the
+# `high` audit gate and not exercised by our build.
+overrides:
+  js-yaml: ^4.3.0
+  shell-quote: ^1.9.0
+  postcss: ^8.5.18
+  adm-zip: ^0.6.0
+  # brace-expansion ships two vulnerable major lines in the tree; patch each.
+  brace-expansion@1: 1.1.16
+  brace-expansion@5: 5.0.7
+  tmp: ^0.2.7
+  uuid: ^11.1.1
+
+# pnpm blocks dependency lifecycle scripts by default. esbuild needs its install script
+# to fetch the platform binary used by vite/wxt; nothing else needs to build.
+allowBuilds:
+  esbuild: true
+  spawn-sync: false
+
+# Supply-chain cooldown: never install a package version published less than 4 days ago
+# (4 * 24 * 60 = 5760 minutes), giving freshly-published (possibly compromised) releases
+# time to be caught before they enter the tree. Frozen-lockfile installs (CI) are
+# unaffected; this gates new resolutions and dependency updates.
+minimumReleaseAge: 5760
+
+# Exempt our own first-party package from the cooldown: it is published by us to a
+# private registry (not a public supply-chain risk), so new releases must install
+# immediately without waiting out the window.
+minimumReleaseAgeExclude:
+  - '@marksyncorg/core'

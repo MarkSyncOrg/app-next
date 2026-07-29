@@ -1,0 +1,194 @@
+/* Palette from the legacy xBrowserSync client (_colors-default / _colors-dark). */
+:root {
+  --bg: #edfeff;
+  --surface: #ffffff;
+  --text: #083039;
+  --muted: #75959c;
+  --accent: #01ab8a;
+  --accent-2: #35c6e8;
+  --on-accent: #edfeff;
+  --success: #30d278;
+  --danger: #ea3869;
+  --border: color-mix(in srgb, var(--text) 15%, transparent);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1e2228;
+    --surface: #2d333b;
+    --text: #cdd9e5;
+    --muted: #8a96a3;
+    --on-accent: #edfeff;
+    --border: #474f5b;
+  }
+}
+
+:root[data-theme='dark'] {
+  --bg: #1e2228;
+  --surface: #2d333b;
+  --text: #cdd9e5;
+  --muted: #8a96a3;
+  --border: #474f5b;
+}
+
+:root[data-theme='light'] {
+  --bg: #edfeff;
+  --surface: #ffffff;
+  --text: #083039;
+  --muted: #75959c;
+  --border: color-mix(in srgb, var(--text) 15%, transparent);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  font:
+    14px/1.45 system-ui,
+    sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+
+#app {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 24px 20px 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+h1 {
+  margin: 0;
+  font-size: 20px;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+h2 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.hint {
+  margin: 0;
+  color: var(--muted);
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-weight: 600;
+}
+
+label.checkbox {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  font-weight: 400;
+}
+
+input[type='file'],
+select {
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font: inherit;
+  background: var(--bg);
+  color: inherit;
+}
+
+input:focus-visible,
+select:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+button {
+  padding: 9px 14px;
+  border: 0;
+  border-radius: 8px;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  color: var(--on-accent);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+button.secondary {
+  background: transparent;
+  color: inherit;
+  border: 1px solid var(--border);
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.log {
+  margin: 0;
+  max-height: 240px;
+  overflow: auto;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* Build stamp: present but quiet, so it never competes with the settings cards. */
+.build-info {
+  margin: 0;
+  text-align: center;
+  color: var(--muted);
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+}
+
+.message {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+.message.error {
+  background: color-mix(in srgb, var(--danger) 18%, transparent);
+}

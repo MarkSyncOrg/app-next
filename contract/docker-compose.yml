@@ -1,0 +1,28 @@
+# Minimal local xBrowserSync backend for contract testing (no reverse proxy).
+# Brings up MongoDB + the reference API image, publishing the API on :8080.
+#
+#   docker compose -f contract/docker-compose.yml up -d
+#   XBS_CONTRACT_URL=http://localhost:8080 npm run test:contract
+#   docker compose -f contract/docker-compose.yml down -v
+
+services:
+  db:
+    image: mongo:4.4.4
+    environment:
+      MONGO_INITDB_DATABASE: xbrowsersync
+      MONGO_INITDB_ROOT_USERNAME: xbsdb
+      MONGO_INITDB_ROOT_PASSWORD: xbsdbpass
+    volumes:
+      - ./mongoconfig.js:/docker-entrypoint-initdb.d/mongoconfig.js:ro
+
+  api:
+    image: xbrowsersync/api:1.1.13
+    depends_on:
+      - db
+    environment:
+      XBROWSERSYNC_DB_USER: xbsdb
+      XBROWSERSYNC_DB_PWD: xbsdbpass
+    ports:
+      - '8080:8080'
+    volumes:
+      - ./settings.json:/usr/src/api/config/settings.json:ro

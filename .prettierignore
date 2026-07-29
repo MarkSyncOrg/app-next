@@ -1,0 +1,12 @@
+node_modules/
+.output/
+.wxt/
+coverage/
+test-results/
+playwright-report/
+src/types/api.d.ts
+pnpm-lock.yaml
+LICENSE
+CHANGELOG.md
+openapi/
+.github/ISSUE_TEMPLATE/

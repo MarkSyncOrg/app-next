@@ -1,0 +1,21 @@
+version: 2
+updates:
+  # The "npm" ecosystem also drives pnpm lockfiles.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    # Wait 4 days after a release before proposing it, matching the pnpm
+    # minimumReleaseAge cooldown so freshly-published versions are vetted first.
+    cooldown:
+      default-days: 4
+    groups:
+      dev-dependencies:
+        dependency-type: development
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 4

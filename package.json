@@ -1,0 +1,47 @@
+{
+  "name": "marksync-webext",
+  "version": "2.0.0",
+  "private": true,
+  "description": "MarkSync web extension (Manifest V3, WXT + TypeScript). Compatible with the xBrowserSync backend API.",
+  "license": "GPL-3.0-only",
+  "type": "module",
+  "packageManager": "pnpm@11.9.0",
+  "engines": {
+    "node": ">=22",
+    "pnpm": ">=11"
+  },
+  "scripts": {
+    "postinstall": "wxt prepare",
+    "dev": "wxt",
+    "dev:firefox": "wxt -b firefox",
+    "build": "wxt build",
+    "build:firefox": "wxt build -b firefox",
+    "zip": "wxt zip",
+    "zip:firefox": "wxt zip -b firefox",
+    "typecheck": "wxt prepare && tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:e2e": "playwright test",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "dependencies": {
+    "@marksyncorg/core": "0.1.2"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.4",
+    "@playwright/test": "1.61.0",
+    "@vitest/coverage-v8": "4.1.9",
+    "eslint": "9.39.4",
+    "eslint-config-prettier": "10.1.8",
+    "globals": "17.6.0",
+    "prettier": "3.8.4",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.61.1",
+    "vitest": "4.1.9",
+    "wxt": "0.20.26"
+  }
+}

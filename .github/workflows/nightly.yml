@@ -1,0 +1,197 @@
+name: Nightly Build
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '0 1 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+# Token for installing @marksyncorg/core from GitHub Packages.
+env:
+  NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+concurrency:
+  group: nightly
+  cancel-in-progress: true
+
+jobs:
+  # A nightly is only worth building when main has moved since the last one, so
+  # compare HEAD against the commit the most recent nightly release was tagged at.
+  # Manual runs always build, so a nightly can be forced without a dummy commit.
+  check:
+    name: Check for new commits
+    runs-on: ubuntu-latest
+    outputs:
+      build: ${{ steps.check.outputs.build }}
+    steps:
+      - name: Compare HEAD with the last published nightly
+        id: check
+        run: |
+          set -euo pipefail
+
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "Manual run: building regardless of changes."
+            echo "build=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Releases come back newest first, so the first nightly-* one is the previous build.
+          tag=$(gh api "repos/${GITHUB_REPOSITORY}/releases?per_page=100" \
+            --jq 'map(select(.draft | not) | select(.tag_name | startswith("nightly-"))) | first | .tag_name // ""')
+          if [ -z "$tag" ]; then
+            echo "No published nightly yet: building."
+            echo "build=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          ref=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${tag}" 2>/dev/null || true)
+          if [ -z "$ref" ]; then
+            echo "Tag ${tag} no longer exists: building."
+            echo "build=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          sha=$(echo "$ref" | jq -r '.object.sha')
+          # Release tags are lightweight, but dereference annotated ones just in case.
+          if [ "$(echo "$ref" | jq -r '.object.type')" = "tag" ]; then
+            sha=$(gh api "repos/${GITHUB_REPOSITORY}/git/tags/${sha}" --jq '.object.sha')
+          fi
+
+          if [ "$sha" = "$GITHUB_SHA" ]; then
+            echo "HEAD is still ${sha}, already released as ${tag}: skipping."
+            echo "build=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "HEAD ${GITHUB_SHA} differs from ${tag} (${sha}): building."
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  test:
+    name: Lint, typecheck & test
+    runs-on: ubuntu-latest
+    needs: check
+    if: needs.check.outputs.build == 'true'
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          registry-url: https://npm.pkg.github.com
+          scope: '@marksyncorg'
+      - run: pnpm install --no-frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+
+  nightly:
+    name: Package nightly builds
+    runs-on: ubuntu-latest
+    needs: test
+    permissions:
+      contents: write # create/update the nightly prerelease
+      packages: read # install @marksyncorg/core from GitHub Packages
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          registry-url: https://npm.pkg.github.com
+          scope: '@marksyncorg'
+      - run: pnpm install --no-frozen-lockfile
+
+      - name: Package Chromium
+        run: pnpm zip
+      - name: Package Firefox
+        run: pnpm zip:firefox
+
+      - name: Read package version
+        run: echo "RELEASE_VERSION=$(node -p "require('./package.json').version")" >> "$GITHUB_ENV"
+
+      # Releases are immutable once published: assets can only be uploaded while the
+      # release is still a draft, and a published release (and its tag) can never be
+      # modified or reused. So each nightly gets its own tag, is created as a draft to
+      # receive its assets, and is then flipped to published.
+      #
+      # The tag names the commit that was built. Rebuilding a commit that already has
+      # a nightly (a forced manual run, or main rolled back to an earlier commit) would
+      # collide with that frozen release, so fall back to a run-suffixed tag.
+      - name: Compute build identifiers
+        run: |
+          set -euo pipefail
+          short_sha=${GITHUB_SHA::7}
+          tag="nightly-${short_sha}"
+          if gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${tag}" >/dev/null 2>&1; then
+            echo "Release ${tag} already exists; disambiguating with the run number."
+            tag="${tag}-${GITHUB_RUN_NUMBER}"
+          fi
+          {
+            echo "SHORT_SHA=${short_sha}"
+            echo "RELEASE_TAG=${tag}"
+            # Build time in UTC, leading the release name so the list reads (and sorts)
+            # chronologically: the tag names a commit, which says nothing about when.
+            echo "BUILD_TIMESTAMP=$(date -u +'%Y-%m-%d %H:%M')"
+          } >> "$GITHUB_ENV"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # wxt zip names artifacts {name}-{version}-{target}.zip; a nightly is identified
+      # by the commit it was built from, not the (static) package version, so swap the
+      # version for the short sha before uploading.
+      - name: Stamp artifact names with the commit sha
+        run: |
+          for f in .output/*-"${RELEASE_VERSION}"-*.zip; do
+            mv "$f" "${f/-${RELEASE_VERSION}-/-nightly-${SHORT_SHA}-}"
+          done
+          ls -1 .output/*.zip
+
+      - name: Create draft nightly release
+        id: draft
+        uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3.0.1
+        with:
+          name: '${{ env.BUILD_TIMESTAMP }} UTC — Nightly ${{ env.SHORT_SHA }}'
+          tag_name: ${{ env.RELEASE_TAG }}
+          draft: true
+          prerelease: true
+          body: |
+            Automated nightly build from the `main` branch (v${{ env.RELEASE_VERSION }}).
+
+            Built: ${{ github.sha }}
+            Built at: ${{ env.BUILD_TIMESTAMP }} UTC
+          files: |
+            .output/*-chrome.zip
+            .output/*-firefox.zip
+            .output/*-sources.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Addressed by release id: draft releases have no tag ref yet, so tag-based
+      # lookups (gh release edit <tag>) cannot find them.
+      - name: Publish nightly release
+        run: gh api --method PATCH "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}" -F draft=false
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_ID: ${{ steps.draft.outputs.id }}
+
+      # Best-effort cleanup so nightlies don't pile up: keep the newest 14. Tags name
+      # commits rather than dates, so age comes from the API's newest-first ordering
+      # instead of sorting the names. Deleting may be blocked for immutable releases,
+      # so never fail the build over it.
+      - name: Prune old nightly releases
+        run: |
+          gh api "repos/${GITHUB_REPOSITORY}/releases?per_page=100" \
+            --jq 'map(select(.draft | not) | select(.tag_name | startswith("nightly-"))) | .[14:][].tag_name' \
+            | while read -r tag; do
+            gh release delete "$tag" --yes || echo "Could not delete $tag (immutable release?); skipping"
+          done
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
