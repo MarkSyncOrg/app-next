@@ -239,7 +239,32 @@ dd {
   text-align: center;
 }
 
-/* Build stamp: present but quiet, so it never competes with the sync controls. */
+/* Footer: the link to the MarkSync website above the build stamp, both quiet so they
+   never compete with the sync controls. */
+.app-footer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.site-link {
+  color: var(--accent);
+  font-size: 12px;
+  text-decoration: none;
+}
+
+.site-link:hover,
+.site-link:focus-visible {
+  text-decoration: underline;
+}
+
+.site-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
 .build-info {
   margin: 0;
   text-align: center;

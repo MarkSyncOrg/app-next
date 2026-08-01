@@ -244,6 +244,11 @@ el<HTMLButtonElement>('open-options').addEventListener('click', () => {
   void browser.runtime.openOptionsPage();
 });
 
+// The anchor opens the site by itself; this only keeps the action in the trace.
+el<HTMLAnchorElement>('site-link').addEventListener('click', () => {
+  void log.debug('Opening the MarkSync website');
+});
+
 async function init(): Promise<void> {
   await log.debug('Popup opened');
   const settings = await send({ type: 'getSettings' });

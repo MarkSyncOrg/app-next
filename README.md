@@ -78,6 +78,12 @@ Debug log:
   log — payloads are reduced to counts, with the origin only when a single bookmark fails
   to be created. The log is meant to be safe to attach to a bug report.
 
+Website link:
+
+- Both the popup and the options page carry a link to
+  [app.marksync.org](https://app.marksync.org) in their footer, opened in a new tab so the
+  popup closing never interrupts what the user was doing.
+
 Build stamp:
 
 - Both the popup and the options page end with the build they are running —

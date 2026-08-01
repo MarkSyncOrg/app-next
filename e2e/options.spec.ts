@@ -16,6 +16,10 @@ test('options page renders settings, backup and log sections', async ({ context,
   await expect(page.locator('#build-info')).toHaveText(
     /^v\d+\.\d+\.\d+( \([0-9a-f]{7}(-dirty)?\))?$/,
   );
+  // Link out to the MarkSync website, opened in a new tab.
+  const link = page.locator('#site-link');
+  await expect(link).toHaveAttribute('href', 'https://app.marksync.org');
+  await expect(link).toHaveAttribute('target', '_blank');
 });
 
 test('log entries from the options page reach the worker log', async ({ context, extensionId }) => {
