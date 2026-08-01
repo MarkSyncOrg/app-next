@@ -160,7 +160,13 @@ function parseSvg(markup: string): Element {
   });
   parsed.querySelectorAll('*').forEach((element) => {
     for (const attribute of Array.from(element.attributes)) {
-      if (attribute.name.toLowerCase().startsWith('on')) {
+      const name = attribute.name.toLowerCase();
+      const isEventHandler = name.startsWith('on');
+      // `<a href="javascript:…">` inside an SVG stays clickable once adopted.
+      const isScriptUrl =
+        (name === 'href' || name.endsWith(':href')) &&
+        attribute.value.trim().toLowerCase().startsWith('javascript:');
+      if (isEventHandler || isScriptUrl) {
         element.removeAttributeNode(attribute);
       }
     }
