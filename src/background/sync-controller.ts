@@ -44,9 +44,22 @@ type SyncTrigger = 'alarm' | 'startup';
 type BookmarkEvent = 'created' | 'changed' | 'moved' | 'removed';
 
 /**
- * Loggable view of a request. The password is never logged, and payloads are reduced
- * to counts: the debug log is downloadable and routinely attached to bug reports, so
- * it must not carry credentials or bookmark contents.
+ * Loggable form of a sync ID.
+ *
+ * The service authenticates nothing beyond the ID: whoever holds it can read, overwrite
+ * or destroy the sync, and it doubles as the key-derivation salt. Since the debug log is
+ * downloadable and routinely attached to bug reports, only a short prefix is recorded —
+ * enough to tell two syncs apart in a trace, useless to anyone who reads the file.
+ */
+function syncIdPrefix(syncId: string | undefined): string {
+  return syncId ? `${syncId.slice(0, 6)}…` : 'none';
+}
+
+/**
+ * Loggable view of a request. The password is never logged, the sync ID only as a
+ * prefix, and payloads are reduced to counts: the debug log is downloadable and
+ * routinely attached to bug reports, so it must not carry credentials or bookmark
+ * contents.
  */
 function describeRequest(request: SyncRequest): LogContext {
   switch (request.type) {
@@ -57,7 +70,7 @@ function describeRequest(request: SyncRequest): LogContext {
     case 'enableExistingSync':
       return {
         serviceUrl: request.serviceUrl,
-        syncId: request.syncId,
+        syncId: syncIdPrefix(request.syncId),
         passwordProvided: request.password.length > 0,
       };
     case 'setSettings':
@@ -166,7 +179,10 @@ export function initSyncController(): void {
         const syncId = await withLock('enableNewSync', () =>
           engine.enableNewSync(request.serviceUrl, request.password),
         );
-        await log.info('Created new sync', { syncId, serviceUrl: request.serviceUrl });
+        await log.info('Created new sync', {
+          syncId: syncIdPrefix(syncId),
+          serviceUrl: request.serviceUrl,
+        });
         return { syncId };
       }
       case 'enableExistingSync':
@@ -176,7 +192,7 @@ export function initSyncController(): void {
           ),
         );
         await log.info('Enabled existing sync', {
-          syncId: request.syncId,
+          syncId: syncIdPrefix(request.syncId),
           serviceUrl: request.serviceUrl,
         });
         return null;

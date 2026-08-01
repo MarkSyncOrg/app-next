@@ -32,18 +32,33 @@ async function send<K extends SyncRequest['type']>(
 }
 
 /**
+ * Hosts allowed to serve over plain HTTP: a service running on this machine, whose
+ * traffic never reaches a network an attacker could sit on.
+ */
+const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
+
+/**
  * Ensures the extension may reach the service's origin. The official host is granted
  * at install; custom/self-hosted URLs are covered by an optional host permission that
  * we request here, within the user gesture of submitting the form.
+ *
+ * Non-loopback services must be HTTPS. The sync ID travels in the request path and is
+ * the only thing the service authenticates on, so over plain HTTP anyone on the path
+ * can read it and then overwrite or destroy the sync.
  */
 async function ensureHostPermission(serviceUrl: string): Promise<void> {
-  let origin: string;
+  let url: URL;
   try {
-    origin = `${new URL(serviceUrl).origin}/*`;
+    url = new URL(serviceUrl);
   } catch {
     await log.warn('Service URL could not be parsed', { serviceUrl });
     throw new Error('Invalid service URL');
   }
+  if (url.protocol !== 'https:' && !LOOPBACK_HOSTS.has(url.hostname)) {
+    await log.warn('Refused a service URL that is not HTTPS', { serviceUrl });
+    throw new Error('The service URL must use HTTPS');
+  }
+  const origin = `${url.origin}/*`;
   if (await browser.permissions.contains({ origins: [origin] })) {
     await log.debug('Host permission already granted', { origin });
     return;
