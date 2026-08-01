@@ -29,6 +29,8 @@ test('popup links to the MarkSync website', async ({ context, extensionId }) => 
   // Opened in a new tab: the popup is dismissed as soon as focus leaves it, so
   // navigating in place would lose whatever the user was doing.
   const link = page.locator('#site-link');
+  await expect(link).toBeVisible();
+  await expect(link).toContainText('Open the MarkSync web app');
   await expect(link).toHaveAttribute('href', 'https://app.marksync.org');
   await expect(link).toHaveAttribute('target', '_blank');
   await expect(link).toHaveAttribute('rel', 'noopener noreferrer');

@@ -15,6 +15,16 @@
       <header class="app-header">
         <img src="/icon/48.png" alt="" width="32" height="32" />
         <h1>MarkSync</h1>
+        <a
+          id="site-link"
+          class="button site-link"
+          href="https://app.marksync.org"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Open the MarkSync web app
+          <span aria-hidden="true">↗</span>
+        </a>
       </header>
 
       <p id="message" class="message" hidden></p>
@@ -94,17 +104,7 @@
         </div>
       </section>
 
-      <footer class="app-footer">
-        <a
-          id="site-link"
-          class="site-link"
-          href="https://app.marksync.org"
-          target="_blank"
-          rel="noopener noreferrer"
-          >app.marksync.org</a
-        >
-        <p id="build-info" class="build-info"></p>
-      </footer>
+      <p id="build-info" class="build-info"></p>
     </main>
 
     <script type="module" src="./main.ts"></script>

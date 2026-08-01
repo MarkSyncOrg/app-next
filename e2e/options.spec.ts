@@ -18,6 +18,8 @@ test('options page renders settings, backup and log sections', async ({ context,
   );
   // Link out to the MarkSync website, opened in a new tab.
   const link = page.locator('#site-link');
+  await expect(link).toBeVisible();
+  await expect(link).toContainText('Open the MarkSync web app');
   await expect(link).toHaveAttribute('href', 'https://app.marksync.org');
   await expect(link).toHaveAttribute('target', '_blank');
 });

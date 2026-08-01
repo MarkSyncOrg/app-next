@@ -131,7 +131,8 @@ select {
 
 input:focus-visible,
 select:focus-visible,
-button:focus-visible {
+button:focus-visible,
+.button:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
@@ -151,7 +152,9 @@ legend {
   padding: 0 4px;
 }
 
-button {
+/* .button is the same control rendered as an anchor, for links that leave the popup. */
+button,
+.button {
   padding: 9px 12px;
   border: 0;
   border-radius: 8px;
@@ -160,6 +163,15 @@ button {
   font: inherit;
   font-weight: 600;
   cursor: pointer;
+}
+
+.button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  text-align: center;
+  text-decoration: none;
 }
 
 button.secondary {
@@ -239,32 +251,14 @@ dd {
   text-align: center;
 }
 
-/* Footer: the link to the MarkSync website above the build stamp, both quiet so they
-   never compete with the sync controls. */
-.app-footer {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
+/* The arrow marks the link as leaving the extension; decorative, so it carries less
+   weight than the label it follows. */
+.site-link span {
+  font-weight: 400;
+  opacity: 0.85;
 }
 
-.site-link {
-  color: var(--accent);
-  font-size: 12px;
-  text-decoration: none;
-}
-
-.site-link:hover,
-.site-link:focus-visible {
-  text-decoration: underline;
-}
-
-.site-link:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-  border-radius: 4px;
-}
-
+/* Build stamp: present but quiet, so it never competes with the sync controls. */
 .build-info {
   margin: 0;
   text-align: center;

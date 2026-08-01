@@ -78,17 +78,20 @@
 
       <button id="open-options" type="button" class="secondary">Settings, backup &amp; logs</button>
 
-      <footer class="app-footer">
-        <a
-          id="site-link"
-          class="site-link"
-          href="https://app.marksync.org"
-          target="_blank"
-          rel="noopener noreferrer"
-          >app.marksync.org</a
-        >
-        <p id="build-info" class="build-info"></p>
-      </footer>
+      <!-- Below the settings button so the view's own primary action (Enable sync /
+           Sync now) is never flanked by a second accent button. -->
+      <a
+        id="site-link"
+        class="button site-link"
+        href="https://app.marksync.org"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        Open the MarkSync web app
+        <span aria-hidden="true">↗</span>
+      </a>
+
+      <p id="build-info" class="build-info"></p>
     </main>
 
     <script type="module" src="./main.ts"></script>

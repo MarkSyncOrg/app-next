@@ -78,11 +78,14 @@ Debug log:
   log — payloads are reduced to counts, with the origin only when a single bookmark fails
   to be created. The log is meant to be safe to attach to a bug report.
 
-Website link:
+Web app:
 
-- Both the popup and the options page carry a link to
-  [app.marksync.org](https://app.marksync.org) in their footer, opened in a new tab so the
-  popup closing never interrupts what the user was doing.
+- Both surfaces carry an **Open the MarkSync web app** button linking to
+  [app.marksync.org](https://app.marksync.org) — at the foot of the popup, below the
+  settings button so the view's own action (Enable sync / Sync now) keeps the only accent
+  button above it, and in the options page header, opposite the title. Each is an anchor
+  styled as a primary button (`.button`) that opens in a new tab, so the popup closing on
+  focus loss never interrupts what the user was doing.
 
 Build stamp:
 
