@@ -131,7 +131,8 @@ select {
 
 input:focus-visible,
 select:focus-visible,
-button:focus-visible {
+button:focus-visible,
+.button:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
@@ -151,7 +152,9 @@ legend {
   padding: 0 4px;
 }
 
-button {
+/* .button is the same control rendered as an anchor, for links that leave the popup. */
+button,
+.button {
   padding: 9px 12px;
   border: 0;
   border-radius: 8px;
@@ -160,6 +163,15 @@ button {
   font: inherit;
   font-weight: 600;
   cursor: pointer;
+}
+
+.button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  text-align: center;
+  text-decoration: none;
 }
 
 button.secondary {
@@ -237,6 +249,13 @@ dd {
   color: var(--muted);
   font-size: 12px;
   text-align: center;
+}
+
+/* The arrow marks the link as leaving the extension; decorative, so it carries less
+   weight than the label it follows. */
+.site-link span {
+  font-weight: 400;
+  opacity: 0.85;
 }
 
 /* Build stamp: present but quiet, so it never competes with the sync controls. */

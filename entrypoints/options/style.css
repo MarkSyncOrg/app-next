@@ -68,6 +68,7 @@ body {
 .app-header {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 10px;
 }
 
@@ -126,12 +127,15 @@ select {
 
 input:focus-visible,
 select:focus-visible,
-button:focus-visible {
+button:focus-visible,
+.button:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
 
-button {
+/* .button is the same control rendered as an anchor, for links that leave the page. */
+button,
+.button {
   padding: 9px 14px;
   border: 0;
   border-radius: 8px;
@@ -140,6 +144,14 @@ button {
   font: inherit;
   font-weight: 600;
   cursor: pointer;
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  text-decoration: none;
 }
 
 button.secondary {
@@ -171,6 +183,20 @@ button:disabled {
   font-size: 12px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+/* Pushed to the far side of the header, opposite the title; in a window too narrow for
+   both, the header wraps and the button keeps its label on one line. */
+.app-header .site-link {
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+/* The arrow marks the link as leaving the page; decorative, so it carries less weight
+   than the label it follows. */
+.site-link span {
+  font-weight: 400;
+  opacity: 0.85;
 }
 
 /* Build stamp: present but quiet, so it never competes with the settings cards. */
