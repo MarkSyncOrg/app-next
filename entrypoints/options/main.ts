@@ -1,12 +1,11 @@
 import { browser } from 'wxt/browser';
 import {
   backupFilename,
-  extractBookmarks,
+  extractBookmarksWithReport,
   parseBackup,
   type Settings,
   type Theme,
 } from '@marksyncorg/core';
-import { stripExecutableUrls } from '../../src/backup/executable-urls';
 import { buildDescription, currentBuild, versionLabel } from '../../src/build-info';
 import { formatLog } from '../../src/logging/log-entry';
 import { createUiLogger } from '../../src/logging/ui-logger';
@@ -149,19 +148,26 @@ restoreButton.addEventListener('click', () => {
     restoreButton.disabled = true;
     try {
       // Parsing happens here (not in the worker) so a malformed file is reported
-      // before anything touches the browser's bookmarks.
+      // before anything touches the browser's bookmarks. `extractBookmarksWithReport`
+      // validates the shape and drops nodes whose URL would execute when opened — a
+      // backup file is the least trusted input in the system — and hands back what it
+      // dropped, which a restore cannot recover from the tree alone.
       const { bookmarks, removed } = await log.operation(
         'Parse backup file',
-        async () => stripExecutableUrls(extractBookmarks(parseBackup(await file.text()))),
+        async () => extractBookmarksWithReport(parseBackup(await file.text())),
         {
           context: { bytes: file.size },
-          summarise: (parsed) => ({ containers: parsed.bookmarks.length, removed: parsed.removed }),
+          summarise: (parsed) => ({
+            containers: parsed.bookmarks.length,
+            removed: parsed.removed.length,
+          }),
         },
       );
-      if (removed > 0) {
-        // A backup file is the one way bookmarks reach the browser without having passed
-        // through this sync's encryption, so it is the one place they can be planted.
-        await log.warn('Dropped bookmarks with an executable URL from the backup', { removed });
+      if (removed.length > 0) {
+        // Count only: the removed entries carry the titles and URLs the log must not.
+        await log.warn('Dropped bookmarks with an executable URL from the backup', {
+          removed: removed.length,
+        });
       }
       await log.operation('Restore backup', () => send({ type: 'restoreBackup', bookmarks }), {
         context: { containers: bookmarks.length },
@@ -169,8 +175,8 @@ restoreButton.addEventListener('click', () => {
       });
       importFile.value = '';
       showMessage(
-        removed > 0
-          ? `Backup restored. ${removed} bookmark(s) with an executable URL were skipped.`
+        removed.length > 0
+          ? `Backup restored. ${removed.length} bookmark(s) with an executable URL were skipped.`
           : 'Backup restored.',
       );
       await loadLog();
