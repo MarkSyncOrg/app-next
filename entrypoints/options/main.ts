@@ -6,6 +6,7 @@ import {
   type Settings,
   type Theme,
 } from '@marksyncorg/core';
+import { stripExecutableUrls } from '../../src/backup/executable-urls';
 import { buildDescription, currentBuild, versionLabel } from '../../src/build-info';
 import { formatLog } from '../../src/logging/log-entry';
 import { createUiLogger } from '../../src/logging/ui-logger';
@@ -149,17 +150,29 @@ restoreButton.addEventListener('click', () => {
     try {
       // Parsing happens here (not in the worker) so a malformed file is reported
       // before anything touches the browser's bookmarks.
-      const bookmarks = await log.operation(
+      const { bookmarks, removed } = await log.operation(
         'Parse backup file',
-        async () => extractBookmarks(parseBackup(await file.text())),
-        { context: { bytes: file.size }, summarise: (parsed) => ({ containers: parsed.length }) },
+        async () => stripExecutableUrls(extractBookmarks(parseBackup(await file.text()))),
+        {
+          context: { bytes: file.size },
+          summarise: (parsed) => ({ containers: parsed.bookmarks.length, removed: parsed.removed }),
+        },
       );
+      if (removed > 0) {
+        // A backup file is the one way bookmarks reach the browser without having passed
+        // through this sync's encryption, so it is the one place they can be planted.
+        await log.warn('Dropped bookmarks with an executable URL from the backup', { removed });
+      }
       await log.operation('Restore backup', () => send({ type: 'restoreBackup', bookmarks }), {
         context: { containers: bookmarks.length },
         successLevel: 'info',
       });
       importFile.value = '';
-      showMessage('Backup restored.');
+      showMessage(
+        removed > 0
+          ? `Backup restored. ${removed} bookmark(s) with an executable URL were skipped.`
+          : 'Backup restored.',
+      );
       await loadLog();
     } catch (error) {
       showMessage((error as Error).message || 'Restore failed', true);

@@ -27,10 +27,17 @@ const gitCommit = git('rev-parse', 'HEAD') || process.env.GITHUB_SHA || '';
 // A local build with uncommitted changes is not the commit it claims to be, so say so.
 const gitDirty = gitCommit !== '' && git('status', '--porcelain') !== '';
 
+// Hosts a user may grant at runtime for a self-hosted service. HTTPS only: the sync ID
+// travels in the request path and is the only thing the service authenticates on, so a
+// plaintext endpoint would hand the sync to anyone on the network path. A local service
+// over http is still reachable in development through WXT_EXTRA_HOST, which is granted
+// at install rather than requested.
+const OPTIONAL_HOSTS = ['https://*/*'];
+
 // WXT configuration. The extension is a Manifest V3 background service worker plus
 // a vanilla popup. No UI framework module is registered on purpose.
 export default defineConfig({
-  manifest: {
+  manifest: ({ manifestVersion }) => ({
     name: 'MarkSync',
     description: 'Sync your bookmarks securely across browsers and devices.',
     homepage_url: 'https://github.com/MarkSyncOrg/app-next',
@@ -38,16 +45,30 @@ export default defineConfig({
     // The official service. Self-hosted/custom service URLs are requested at runtime
     // via optional host permissions so users only grant what they actually use.
     host_permissions: ['https://api.xbrowsersync.org/*', ...(extraHost ? [extraHost] : [])],
-    optional_host_permissions: ['https://*/*', 'http://*/*'],
+    // MV2 (the Firefox target) has no `optional_host_permissions`; Gecko reads optional
+    // host patterns from `optional_permissions`. Emitting the MV3 key there makes it
+    // vanish from the built manifest, and `permissions.request()` then rejects every
+    // custom service URL — i.e. self-hosted setup silently stops working on Firefox.
+    ...(manifestVersion === 2
+      ? { optional_permissions: OPTIONAL_HOSTS }
+      : { optional_host_permissions: OPTIONAL_HOSTS }),
     browser_specific_settings: {
       gecko: {
         id: 'marksync-webext@marksync.org',
-        strict_min_version: '115.0',
+        // Firefox's built-in data collection consent — the key below — landed in 140 on
+        // desktop and 142 on Android. AMO requires the disclosure, so the minimums are
+        // pinned to the first versions that understand it; anything lower makes the
+        // validator warn that the key is declared for browsers that ignore it. 140 is
+        // the current ESR, so this only excludes users on stale non-ESR builds.
+        strict_min_version: '140.0',
         // The extension collects no telemetry; all sync data is end-to-end encrypted.
         data_collection_permissions: { required: ['none'] },
       },
+      gecko_android: {
+        strict_min_version: '142.0',
+      },
     },
-  },
+  }),
   // Build stamp constants, read through src/build-info.ts.
   vite: () => ({
     define: {

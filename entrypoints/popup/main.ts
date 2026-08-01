@@ -32,18 +32,33 @@ async function send<K extends SyncRequest['type']>(
 }
 
 /**
+ * Hosts allowed to serve over plain HTTP: a service running on this machine, whose
+ * traffic never reaches a network an attacker could sit on.
+ */
+const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
+
+/**
  * Ensures the extension may reach the service's origin. The official host is granted
  * at install; custom/self-hosted URLs are covered by an optional host permission that
  * we request here, within the user gesture of submitting the form.
+ *
+ * Non-loopback services must be HTTPS. The sync ID travels in the request path and is
+ * the only thing the service authenticates on, so over plain HTTP anyone on the path
+ * can read it and then overwrite or destroy the sync.
  */
 async function ensureHostPermission(serviceUrl: string): Promise<void> {
-  let origin: string;
+  let url: URL;
   try {
-    origin = `${new URL(serviceUrl).origin}/*`;
+    url = new URL(serviceUrl);
   } catch {
     await log.warn('Service URL could not be parsed', { serviceUrl });
     throw new Error('Invalid service URL');
   }
+  if (url.protocol !== 'https:' && !LOOPBACK_HOSTS.has(url.hostname)) {
+    await log.warn('Refused a service URL that is not HTTPS', { serviceUrl });
+    throw new Error('The service URL must use HTTPS');
+  }
+  const origin = `${url.origin}/*`;
   if (await browser.permissions.contains({ origins: [origin] })) {
     await log.debug('Host permission already granted', { origin });
     return;
@@ -141,10 +156,43 @@ const qrFigure = el('qr');
 const qrCanvas = el('qr-canvas');
 const toggleQrButton = el<HTMLButtonElement>('toggle-qr');
 
+/**
+ * Turns SVG markup into a live element without going through `innerHTML`: the string is
+ * parsed as XML into an inert document, so nothing in it runs at parse time, anything
+ * executable is dropped, and only then is the `<svg>` root adopted into the popup.
+ * Assigning markup to `innerHTML` is also what the AMO validator flags as unsafe.
+ */
+function parseSvg(markup: string): Element {
+  const parsed = new DOMParser().parseFromString(markup, 'image/svg+xml');
+  const root = parsed.documentElement;
+  if (root.localName !== 'svg' || parsed.querySelector('parsererror')) {
+    throw new Error('The QR code could not be rendered');
+  }
+  // Defence in depth: the markup is generated locally from the sync ID, but a QR code
+  // has no use for scripting, so nothing executable joins the document.
+  parsed.querySelectorAll('script, foreignObject').forEach((node) => {
+    node.remove();
+  });
+  parsed.querySelectorAll('*').forEach((element) => {
+    for (const attribute of Array.from(element.attributes)) {
+      const name = attribute.name.toLowerCase();
+      const isEventHandler = name.startsWith('on');
+      // `<a href="javascript:…">` inside an SVG stays clickable once adopted.
+      const isScriptUrl =
+        (name === 'href' || name.endsWith(':href')) &&
+        attribute.value.trim().toLowerCase().startsWith('javascript:');
+      if (isEventHandler || isScriptUrl) {
+        element.removeAttributeNode(attribute);
+      }
+    }
+  });
+  return document.importNode(root, true);
+}
+
 /** Hides the QR code and resets the toggle (e.g. when the displayed sync ID changes). */
 function hideQr(): void {
   qrFigure.hidden = true;
-  qrCanvas.innerHTML = '';
+  qrCanvas.replaceChildren();
   toggleQrButton.textContent = 'Show QR code';
   toggleQrButton.setAttribute('aria-expanded', 'false');
 }
@@ -156,7 +204,7 @@ toggleQrButton.addEventListener('click', () => {
     return;
   }
   void withBusy('Show QR code', toggleQrButton, async () => {
-    qrCanvas.innerHTML = await renderSyncIdQrSvg(currentSyncId);
+    qrCanvas.replaceChildren(parseSvg(await renderSyncIdQrSvg(currentSyncId)));
     qrFigure.hidden = false;
     toggleQrButton.textContent = 'Hide QR code';
     toggleQrButton.setAttribute('aria-expanded', 'true');

@@ -1,0 +1,13 @@
+diff --git a/build/production/lzutf8.js b/build/production/lzutf8.js
+index b9ccd1b..ff5d6ed 100644
+--- a/build/production/lzutf8.js
++++ b/build/production/lzutf8.js
+@@ -45,7 +45,7 @@ var LZUTF8;
+             return;
+         console.log(message);
+         if (appendToDocument && typeof document == "object")
+-            document.body.innerHTML += message + "<br/>";
++            document.body.append(message, document.createElement("br"));
+     };
+     LZUTF8.createErrorMessage = function (exception, title) {
+         if (title === void 0) { title = "Unhandled exception"; }
