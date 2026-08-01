@@ -1,8 +1,9 @@
 name: Nightly Build
 
+# Nightlies are built from the schedule alone — 01:00 UTC, once a day — and never on
+# merge to main, so a busy day yields one build instead of one per merge. A build needed
+# out of band is a workflow_dispatch away.
 on:
-  push:
-    branches: [main]
   schedule:
     - cron: '0 1 * * *'
   workflow_dispatch:
