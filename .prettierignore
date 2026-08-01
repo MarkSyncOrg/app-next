@@ -6,6 +6,7 @@ test-results/
 playwright-report/
 src/types/api.d.ts
 pnpm-lock.yaml
+patches/
 LICENSE
 CHANGELOG.md
 openapi/

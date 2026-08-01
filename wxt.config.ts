@@ -42,9 +42,17 @@ export default defineConfig({
     browser_specific_settings: {
       gecko: {
         id: 'marksync-webext@marksync.org',
-        strict_min_version: '115.0',
+        // Firefox's built-in data collection consent — the key below — landed in 140 on
+        // desktop and 142 on Android. AMO requires the disclosure, so the minimums are
+        // pinned to the first versions that understand it; anything lower makes the
+        // validator warn that the key is declared for browsers that ignore it. 140 is
+        // the current ESR, so this only excludes users on stale non-ESR builds.
+        strict_min_version: '140.0',
         // The extension collects no telemetry; all sync data is end-to-end encrypted.
         data_collection_permissions: { required: ['none'] },
+      },
+      gecko_android: {
+        strict_min_version: '142.0',
       },
     },
   },

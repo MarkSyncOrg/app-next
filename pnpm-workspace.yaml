@@ -18,6 +18,16 @@ overrides:
   tmp: ^0.2.7
   uuid: ^11.1.1
 
+# lzutf8 (transitive, via @marksyncorg/core) writes its optional debug output with
+# `document.body.innerHTML += …`. The branch is dead here — nothing ever asks it to log
+# to the document — but the bundler cannot prove that, so the string ships in
+# background.js and in the popup/options chunk and the AMO validator flags it as an
+# unsafe innerHTML assignment. The patch keeps the same behaviour using text nodes.
+# Pinned to the exact version: a lzutf8 bump fails the install until the patch is
+# re-checked, rather than silently dropping it.
+patchedDependencies:
+  lzutf8@0.6.3: patches/lzutf8@0.6.3.patch
+
 # pnpm blocks dependency lifecycle scripts by default. esbuild needs its install script
 # to fetch the platform binary used by vite/wxt; nothing else needs to build.
 allowBuilds:

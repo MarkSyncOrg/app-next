@@ -66,6 +66,11 @@ maybe('a bookmark created on device A appears natively on device B after sync', 
   const syncId = (await popupA.locator('#status-sync-id').textContent())?.trim() ?? '';
   expect(syncId).toMatch(/^[a-f0-9]{32}$/);
 
+  // The QR code is the only place the popup turns markup into DOM, and it does so by
+  // parsing rather than assigning innerHTML — so assert a real <svg> lands in the page.
+  await popupA.click('#toggle-qr');
+  await expect(popupA.locator('#qr-canvas svg')).toBeVisible();
+
   // --- Device B: enable the same sync; the bookmark must be applied locally ---
   const deviceB = await launchDevice();
   const popupB = await deviceB.context.newPage();

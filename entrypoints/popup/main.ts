@@ -141,10 +141,37 @@ const qrFigure = el('qr');
 const qrCanvas = el('qr-canvas');
 const toggleQrButton = el<HTMLButtonElement>('toggle-qr');
 
+/**
+ * Turns SVG markup into a live element without going through `innerHTML`: the string is
+ * parsed as XML into an inert document, so nothing in it runs at parse time, anything
+ * executable is dropped, and only then is the `<svg>` root adopted into the popup.
+ * Assigning markup to `innerHTML` is also what the AMO validator flags as unsafe.
+ */
+function parseSvg(markup: string): Element {
+  const parsed = new DOMParser().parseFromString(markup, 'image/svg+xml');
+  const root = parsed.documentElement;
+  if (root.localName !== 'svg' || parsed.querySelector('parsererror')) {
+    throw new Error('The QR code could not be rendered');
+  }
+  // Defence in depth: the markup is generated locally from the sync ID, but a QR code
+  // has no use for scripting, so nothing executable joins the document.
+  parsed.querySelectorAll('script, foreignObject').forEach((node) => {
+    node.remove();
+  });
+  parsed.querySelectorAll('*').forEach((element) => {
+    for (const attribute of Array.from(element.attributes)) {
+      if (attribute.name.toLowerCase().startsWith('on')) {
+        element.removeAttributeNode(attribute);
+      }
+    }
+  });
+  return document.importNode(root, true);
+}
+
 /** Hides the QR code and resets the toggle (e.g. when the displayed sync ID changes). */
 function hideQr(): void {
   qrFigure.hidden = true;
-  qrCanvas.innerHTML = '';
+  qrCanvas.replaceChildren();
   toggleQrButton.textContent = 'Show QR code';
   toggleQrButton.setAttribute('aria-expanded', 'false');
 }
@@ -156,7 +183,7 @@ toggleQrButton.addEventListener('click', () => {
     return;
   }
   void withBusy('Show QR code', toggleQrButton, async () => {
-    qrCanvas.innerHTML = await renderSyncIdQrSvg(currentSyncId);
+    qrCanvas.replaceChildren(parseSvg(await renderSyncIdQrSvg(currentSyncId)));
     qrFigure.hidden = false;
     toggleQrButton.textContent = 'Hide QR code';
     toggleQrButton.setAttribute('aria-expanded', 'true');
