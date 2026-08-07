@@ -36,35 +36,52 @@ async function send<K extends SyncRequest['type']>(
   return response.data;
 }
 
+/** A host permission request already in flight, started inside a user gesture. */
+interface PendingHostPermission {
+  /** The match pattern asked for, e.g. `https://sync.example.org/*`. */
+  origin: string;
+  /** Settles with the user's answer (true when the origin is granted). */
+  granted: Promise<boolean>;
+}
+
 /**
- * Ensures the extension may reach the service's origin. The official host is granted
- * at install; custom/self-hosted URLs are covered by an optional host permission that
- * we request here, within the user gesture of submitting the form.
+ * Asks the browser to grant the service's origin — and does it *now*, synchronously.
+ *
+ * `permissions.request()` may only be called while the browser is still handling the
+ * user input that led to it, and Firefox drops that state at the very first `await`:
+ * anything asynchronous in between (a log line, or even `permissions.contains()`) makes
+ * the call throw "permissions.request may only be called from a user input handler".
+ * Chrome keeps a transient activation for a few seconds, which is why this only ever
+ * failed on Firefox — and only for custom services, since the official host is granted
+ * at install and never reached the request. The whole function therefore stays
+ * synchronous and hands the pending promise back for the async flow to await; the
+ * logging lives in {@link ensureHostPermission}, after the request is already out.
+ *
+ * For the same reason there is no `permissions.contains()` pre-check, and none is
+ * needed: requesting an origin the extension already holds resolves true without
+ * prompting the user.
  *
  * The URL is put through core's `normalizeServiceUrl`, which is the same check the API
  * client applies before every request: HTTPS (bar loopback), no query, no fragment, no
  * embedded credentials. Running it here means a bad URL is refused with a readable
  * message before the browser is asked for a host permission, rather than a round trip
- * later — and there is one definition of a valid service URL, not two.
+ * later — and there is one definition of a valid service URL, not two. It throws
+ * synchronously, so the caller reports the bad URL without starting the flow.
  */
-async function ensureHostPermission(serviceUrl: string): Promise<void> {
-  let origin: string;
-  try {
-    origin = `${new URL(normalizeServiceUrl(serviceUrl)).origin}/*`;
-  } catch (error) {
-    await log.warn('Refused an unusable service URL', {
-      serviceUrl,
-      errorMessage: (error as Error).message,
-    });
-    throw error instanceof Error ? error : new Error('Invalid service URL');
-  }
-  if (await browser.permissions.contains({ origins: [origin] })) {
-    await log.debug('Host permission already granted', { origin });
-    return;
-  }
-  await log.info('Requesting host permission', { origin });
-  const granted = await browser.permissions.request({ origins: [origin] });
-  if (!granted) {
+function requestHostPermission(serviceUrl: string): PendingHostPermission {
+  const origin = `${new URL(normalizeServiceUrl(serviceUrl)).origin}/*`;
+  const granted = browser.permissions.request({ origins: [origin] });
+  // The submit flow only awaits this a few ticks from now (it logs first). Attaching a
+  // handler here keeps an immediate rejection from being reported as an unhandled one
+  // in the meantime; the promise still rejects for the awaiting caller.
+  granted.catch(() => {});
+  return { origin, granted };
+}
+
+/** Waits for a pending host permission request and records how it went. */
+async function ensureHostPermission({ origin, granted }: PendingHostPermission): Promise<void> {
+  await log.info('Requested host permission', { origin });
+  if (!(await granted)) {
     await log.warn('Host permission denied by the user', { origin });
     throw new Error('Permission to access this service was denied');
   }
@@ -239,16 +256,28 @@ setupForm.querySelectorAll<HTMLInputElement>('input[name="mode"]').forEach((radi
 setupForm.addEventListener('submit', (event) => {
   event.preventDefault();
   clearMessage();
+  const serviceUrl = serviceUrlInput.value.trim();
+  const password = passwordInput.value;
+  // Fired here rather than inside the async flow below: the browser only honours a
+  // permission request while it is still handling this submit event, so nothing may be
+  // awaited before it. See requestHostPermission.
+  let pending: PendingHostPermission;
+  try {
+    pending = requestHostPermission(serviceUrl);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : 'Invalid service URL';
+    void log.warn('Refused an unusable service URL', { serviceUrl, errorMessage: reason });
+    showMessage(reason, true);
+    return;
+  }
   void withBusy('Enable sync', enableButton, async () => {
-    const serviceUrl = serviceUrlInput.value.trim();
-    const password = passwordInput.value;
     // Never log the password itself — only whether one was entered.
     await log.info('Setup submitted', {
       mode: selectedMode(),
       serviceUrl,
       passwordProvided: password.length > 0,
     });
-    await ensureHostPermission(serviceUrl);
+    await ensureHostPermission(pending);
     if (selectedMode() === 'new') {
       const { syncId } = await send({ type: 'enableNewSync', serviceUrl, password });
       showMessage(`Sync created. Save this sync ID to add other devices: ${syncId}`);
