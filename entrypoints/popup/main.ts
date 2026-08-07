@@ -1,13 +1,9 @@
 import { browser } from 'wxt/browser';
-import {
-  normalizeServiceUrl,
-  renderSyncIdQrSvg,
-  type SyncOutcome,
-  type Theme,
-} from '@marksyncorg/core';
+import { renderSyncIdQrSvg, type SyncOutcome, type Theme } from '@marksyncorg/core';
 import { buildDescription, currentBuild, versionLabel } from '../../src/build-info';
 import { createUiLogger } from '../../src/logging/ui-logger';
 import type { SyncRequest, SyncResponse, SyncResultData } from '../../src/messaging';
+import { HostPermissionGate } from '../../src/webext/host-permission';
 
 const SYNC_OUTCOME_MESSAGES: Record<SyncOutcome, string> = {
   idle: 'Already up to date.',
@@ -36,41 +32,6 @@ async function send<K extends SyncRequest['type']>(
   return response.data;
 }
 
-/**
- * Ensures the extension may reach the service's origin. The official host is granted
- * at install; custom/self-hosted URLs are covered by an optional host permission that
- * we request here, within the user gesture of submitting the form.
- *
- * The URL is put through core's `normalizeServiceUrl`, which is the same check the API
- * client applies before every request: HTTPS (bar loopback), no query, no fragment, no
- * embedded credentials. Running it here means a bad URL is refused with a readable
- * message before the browser is asked for a host permission, rather than a round trip
- * later — and there is one definition of a valid service URL, not two.
- */
-async function ensureHostPermission(serviceUrl: string): Promise<void> {
-  let origin: string;
-  try {
-    origin = `${new URL(normalizeServiceUrl(serviceUrl)).origin}/*`;
-  } catch (error) {
-    await log.warn('Refused an unusable service URL', {
-      serviceUrl,
-      errorMessage: (error as Error).message,
-    });
-    throw error instanceof Error ? error : new Error('Invalid service URL');
-  }
-  if (await browser.permissions.contains({ origins: [origin] })) {
-    await log.debug('Host permission already granted', { origin });
-    return;
-  }
-  await log.info('Requesting host permission', { origin });
-  const granted = await browser.permissions.request({ origins: [origin] });
-  if (!granted) {
-    await log.warn('Host permission denied by the user', { origin });
-    throw new Error('Permission to access this service was denied');
-  }
-  await log.info('Host permission granted', { origin });
-}
-
 /** Returns a required element by ID, narrowing to the expected type. */
 function el<T extends HTMLElement>(id: string): T {
   const element = document.getElementById(id);
@@ -95,6 +56,16 @@ const build = currentBuild(browser.runtime.getManifest().version);
 const buildInfo = el('build-info');
 buildInfo.textContent = versionLabel(build);
 buildInfo.title = buildDescription(build);
+
+const hostPermissions = new HostPermissionGate(browser.permissions, log);
+// The submit handler has to ask for the host permission without awaiting anything first
+// (see HostPermissionGate), so the snapshot of what is already granted has to be in
+// place before the form can be submitted. Read as the popup opens, independently of the
+// status round-trip in init(): a sleeping worker must not keep setup from starting.
+enableButton.disabled = true;
+void hostPermissions.refresh().finally(() => {
+  enableButton.disabled = false;
+});
 
 /** Applies the chosen theme to the popup (system theme = follow OS). */
 function applyTheme(theme: Theme): void {
@@ -239,8 +210,13 @@ setupForm.querySelectorAll<HTMLInputElement>('input[name="mode"]').forEach((radi
 setupForm.addEventListener('submit', (event) => {
   event.preventDefault();
   clearMessage();
+  const serviceUrl = serviceUrlInput.value.trim();
+  // Asked for here rather than inside the async action below: Firefox only accepts
+  // permissions.request() while it is still handling this submit event, and everything
+  // in withBusy() — including the first log line — resolves in a later task. The result
+  // is awaited there, so a denial still surfaces as an error message.
+  const permission = hostPermissions.ensure(serviceUrl);
   void withBusy('Enable sync', enableButton, async () => {
-    const serviceUrl = serviceUrlInput.value.trim();
     const password = passwordInput.value;
     // Never log the password itself — only whether one was entered.
     await log.info('Setup submitted', {
@@ -248,7 +224,7 @@ setupForm.addEventListener('submit', (event) => {
       serviceUrl,
       passwordProvided: password.length > 0,
     });
-    await ensureHostPermission(serviceUrl);
+    await permission;
     if (selectedMode() === 'new') {
       const { syncId } = await send({ type: 'enableNewSync', serviceUrl, password });
       showMessage(`Sync created. Save this sync ID to add other devices: ${syncId}`);
