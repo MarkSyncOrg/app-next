@@ -7,6 +7,11 @@ on:
   schedule:
     - cron: '0 1 * * *'
   workflow_dispatch:
+    inputs:
+      skip_store_upload:
+        description: 'Build the nightly release without uploading it to the store test channels'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -110,13 +115,32 @@ jobs:
           scope: '@marksyncorg'
       - run: pnpm install --no-frozen-lockfile
 
+      # The stores reject a version they have already accepted, so a nightly cannot ship
+      # the package version — that one only moves on release. Each nightly appends the
+      # run number, which is monotonic across the workflow's whole history and never
+      # resets, giving `2.0.0.<run>`: unique, always newer than the last nightly, and
+      # within Chrome's four-part / 0–65535-per-part version format. Read by
+      # wxt.config.ts, so the manifest and the zip filenames agree.
+      #
+      # Because the nightly version sorts *above* the package version it is derived from
+      # (2.0.0.412 > 2.0.0), the release that closes a cycle must carry a bumped package
+      # version — 2.0.1 or 2.1.0, never a re-released 2.0.0. See "Publishing" in README.md.
+      - name: Compute the nightly version
+        run: |
+          set -euo pipefail
+          package_version=$(node -p "require('./package.json').version")
+          # Strip any prerelease/build suffix: browsers only accept plain numbers.
+          base=${package_version%%-*}
+          {
+            echo "RELEASE_VERSION=${package_version}"
+            echo "NIGHTLY_VERSION=${base}.${GITHUB_RUN_NUMBER}"
+            echo "WXT_EXTENSION_VERSION=${base}.${GITHUB_RUN_NUMBER}"
+          } >> "$GITHUB_ENV"
+
       - name: Package Chromium
         run: pnpm zip
       - name: Package Firefox
         run: pnpm zip:firefox
-
-      - name: Read package version
-        run: echo "RELEASE_VERSION=$(node -p "require('./package.json').version")" >> "$GITHUB_ENV"
 
       # Releases are immutable once published: assets can only be uploaded while the
       # release is still a draft, and a published release (and its tag) can never be
@@ -146,12 +170,12 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # wxt zip names artifacts {name}-{version}-{target}.zip; a nightly is identified
-      # by the commit it was built from, not the (static) package version, so swap the
+      # by the commit it was built from, not by its generated version, so swap the
       # version for the short sha before uploading.
       - name: Stamp artifact names with the commit sha
         run: |
-          for f in .output/*-"${RELEASE_VERSION}"-*.zip; do
-            mv "$f" "${f/-${RELEASE_VERSION}-/-nightly-${SHORT_SHA}-}"
+          for f in .output/*-"${NIGHTLY_VERSION}"-*.zip; do
+            mv "$f" "${f/-${NIGHTLY_VERSION}-/-nightly-${SHORT_SHA}-}"
           done
           ls -1 .output/*.zip
 
@@ -168,6 +192,7 @@ jobs:
 
             Built: ${{ github.sha }}
             Built at: ${{ env.BUILD_TIMESTAMP }} UTC
+            Manifest version: ${{ env.NIGHTLY_VERSION }}
           files: |
             .output/*-chrome.zip
             .output/*-firefox.zip
@@ -196,3 +221,74 @@ jobs:
           done
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # A nightly is unreviewed code built from whatever landed on main that day, so it
+      # goes to each store's *test* channel, never to the public listing: Chrome's
+      # trusted-tester audience (the public listing keeps serving the last release) and
+      # an unlisted — signed but never listed — Firefox build. Shipping a nightly to
+      # everyone would mean a review submission a day and users auto-updated onto code
+      # nobody reviewed; publishing to the public channels is release.yml's job.
+      #
+      # Each store is uploaded to only when its credentials are present, so configuring
+      # one store does not block on the other. `wxt submit` submits a store only when it
+      # is given a zip, which is how the flags below select them.
+      - name: Check which store credentials are configured
+        id: stores
+        if: ${{ !inputs.skip_store_upload }}
+        run: |
+          set -euo pipefail
+          have() { [ -n "${!1:-}" ]; }
+
+          if have CHROME_EXTENSION_ID && have CHROME_CLIENT_ID \
+            && have CHROME_CLIENT_SECRET && have CHROME_REFRESH_TOKEN; then
+            echo 'chrome=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'chrome=false' >> "$GITHUB_OUTPUT"
+            echo '::notice::Chrome Web Store credentials are not configured; skipping the Chrome upload.'
+          fi
+
+          if have FIREFOX_EXTENSION_ID && have FIREFOX_JWT_ISSUER && have FIREFOX_JWT_SECRET; then
+            echo 'firefox=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'firefox=false' >> "$GITHUB_OUTPUT"
+            echo '::notice::AMO credentials are not configured; skipping the Firefox upload.'
+          fi
+        env:
+          CHROME_EXTENSION_ID: ${{ secrets.CHROME_EXTENSION_ID }}
+          CHROME_CLIENT_ID: ${{ secrets.CHROME_CLIENT_ID }}
+          CHROME_CLIENT_SECRET: ${{ secrets.CHROME_CLIENT_SECRET }}
+          CHROME_REFRESH_TOKEN: ${{ secrets.CHROME_REFRESH_TOKEN }}
+          FIREFOX_EXTENSION_ID: ${{ secrets.FIREFOX_EXTENSION_ID }}
+          FIREFOX_JWT_ISSUER: ${{ secrets.FIREFOX_JWT_ISSUER }}
+          FIREFOX_JWT_SECRET: ${{ secrets.FIREFOX_JWT_SECRET }}
+
+      - name: Upload the nightly to the store test channels
+        if: steps.stores.outputs.chrome == 'true' || steps.stores.outputs.firefox == 'true'
+        run: |
+          set -euo pipefail
+          args=()
+          if [ "${CHROME_CONFIGURED}" = 'true' ]; then
+            args+=(--chrome-zip "$(echo .output/*-chrome.zip)")
+          fi
+          if [ "${FIREFOX_CONFIGURED}" = 'true' ]; then
+            # AMO needs the sources for a bundled extension, and refuses the upload
+            # without them, so the two zips always travel together.
+            args+=(--firefox-zip "$(echo .output/*-firefox.zip)")
+            args+=(--firefox-sources-zip "$(echo .output/*-sources.zip)")
+          fi
+          pnpm exec wxt submit "${args[@]}"
+        env:
+          CHROME_CONFIGURED: ${{ steps.stores.outputs.chrome }}
+          FIREFOX_CONFIGURED: ${{ steps.stores.outputs.firefox }}
+          CHROME_EXTENSION_ID: ${{ secrets.CHROME_EXTENSION_ID }}
+          CHROME_CLIENT_ID: ${{ secrets.CHROME_CLIENT_ID }}
+          CHROME_CLIENT_SECRET: ${{ secrets.CHROME_CLIENT_SECRET }}
+          CHROME_REFRESH_TOKEN: ${{ secrets.CHROME_REFRESH_TOKEN }}
+          CHROME_PUBLISH_TARGET: trustedTesters
+          FIREFOX_EXTENSION_ID: ${{ secrets.FIREFOX_EXTENSION_ID }}
+          FIREFOX_JWT_ISSUER: ${{ secrets.FIREFOX_JWT_ISSUER }}
+          FIREFOX_JWT_SECRET: ${{ secrets.FIREFOX_JWT_SECRET }}
+          FIREFOX_CHANNEL: unlisted
+          # Set the STORE_DRY_RUN repository variable to 'true' to exercise the whole
+          # pipeline — credentials included — without uploading anything.
+          DRY_RUN: ${{ vars.STORE_DRY_RUN }}

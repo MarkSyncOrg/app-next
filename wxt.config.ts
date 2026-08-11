@@ -27,6 +27,14 @@ const gitCommit = git('rev-parse', 'HEAD') || process.env.GITHUB_SHA || '';
 // A local build with uncommitted changes is not the commit it claims to be, so say so.
 const gitDirty = gitCommit !== '' && git('status', '--porcelain') !== '';
 
+// Version stamped into the manifest, overriding package.json when set. Both stores reject
+// a version they have already seen, and nightlies are built from a package version that
+// only moves on release, so CI hands every uploadable build its own version (nightlies get
+// a fourth component, `2.0.0.<run>`, which is monotonic and stays inside the four-part,
+// 0–65535-per-part format Chrome accepts). Unset locally and for release builds, where
+// package.json is the source of truth.
+const versionOverride = process.env.WXT_EXTENSION_VERSION;
+
 // Hosts a user may grant at runtime for a self-hosted service. HTTPS only: the sync ID
 // travels in the request path and is the only thing the service authenticates on, so a
 // plaintext endpoint would hand the sync to anyone on the network path. A local service
@@ -40,6 +48,7 @@ export default defineConfig({
   manifest: ({ manifestVersion }) => ({
     name: 'MarkSync',
     description: 'Sync your bookmarks securely across browsers and devices.',
+    ...(versionOverride ? { version: versionOverride } : {}),
     homepage_url: 'https://github.com/MarkSyncOrg/app-next',
     permissions: ['storage', 'bookmarks', 'alarms'],
     // The official service. Self-hosted/custom service URLs are requested at runtime

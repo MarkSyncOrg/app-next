@@ -1,0 +1,206 @@
+name: Release
+
+# Publishing to the public store channels is deliberately tag-driven rather than
+# scheduled: every upload here is submitted for review and auto-updates every user, so it
+# happens when someone cuts a release, not once a night. Nightlies go to the stores' test
+# channels instead (see nightly.yml).
+#
+# Cutting a release is: bump `version` in package.json, merge it, then tag that commit
+# `v<version>` and push the tag. The version must be higher than every nightly built from
+# the previous one — nightlies append a fourth component (`2.0.0.<run>`), which sorts
+# above the `2.0.0` they came from, so a release always bumps at least the patch.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Check credentials and build the artifacts without uploading to the stores'
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  packages: read
+
+# Token for installing @marksyncorg/core from GitHub Packages.
+env:
+  NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+# Never cancel a release in flight: a store upload interrupted halfway leaves a draft
+# behind that has to be sorted out by hand.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # The tag is the release's only source of truth for what is being shipped, so refuse to
+  # build when it disagrees with the version that would actually go into the manifest.
+  verify:
+    name: Verify the tag matches the package version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Compare the tag with package.json
+        id: version
+        run: |
+          set -euo pipefail
+          version=$(node -p "require('./package.json').version")
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+          if [ "$GITHUB_REF_TYPE" != 'tag' ]; then
+            if [ "${DRY_RUN}" = 'true' ]; then
+              echo "::notice::Dry run on ${GITHUB_REF_NAME} (not a tag): skipping the tag check."
+              exit 0
+            fi
+            echo "::error::A real release must run on a v* tag; ${GITHUB_REF_NAME} is not one."
+            exit 1
+          fi
+
+          if [ "$GITHUB_REF_NAME" != "v${version}" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match package.json version ${version} (expected v${version})."
+            exit 1
+          fi
+          echo "Releasing v${version}."
+        env:
+          DRY_RUN: ${{ inputs.dry_run }}
+
+  test:
+    name: Lint, typecheck & test
+    runs-on: ubuntu-latest
+    needs: verify
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          registry-url: https://npm.pkg.github.com
+          scope: '@marksyncorg'
+      - run: pnpm install --no-frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+
+  release:
+    name: Publish to the stores
+    runs-on: ubuntu-latest
+    needs: [verify, test]
+    permissions:
+      contents: write # create the GitHub release
+      packages: read # install @marksyncorg/core from GitHub Packages
+    # Uploads here reach real users. The environment is what makes a manual approval
+    # possible: add required reviewers to `store-release` in the repository settings and
+    # every release waits for a human before the upload step runs.
+    environment: store-release
+    env:
+      RELEASE_VERSION: ${{ needs.verify.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          registry-url: https://npm.pkg.github.com
+          scope: '@marksyncorg'
+      - run: pnpm install --no-frozen-lockfile
+
+      # No WXT_EXTENSION_VERSION here, unlike the nightly: a release ships exactly the
+      # version package.json declares, which is the one the tag was checked against.
+      - name: Package Chromium
+        run: pnpm zip
+      - name: Package Firefox
+        run: pnpm zip:firefox
+
+      - name: Check which store credentials are configured
+        id: stores
+        run: |
+          set -euo pipefail
+          have() { [ -n "${!1:-}" ]; }
+
+          if have CHROME_EXTENSION_ID && have CHROME_CLIENT_ID \
+            && have CHROME_CLIENT_SECRET && have CHROME_REFRESH_TOKEN; then
+            echo 'chrome=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'chrome=false' >> "$GITHUB_OUTPUT"
+            echo '::warning::Chrome Web Store credentials are not configured; the Chrome release was not uploaded.'
+          fi
+
+          if have FIREFOX_EXTENSION_ID && have FIREFOX_JWT_ISSUER && have FIREFOX_JWT_SECRET; then
+            echo 'firefox=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'firefox=false' >> "$GITHUB_OUTPUT"
+            echo '::warning::AMO credentials are not configured; the Firefox release was not uploaded.'
+          fi
+        env:
+          CHROME_EXTENSION_ID: ${{ secrets.CHROME_EXTENSION_ID }}
+          CHROME_CLIENT_ID: ${{ secrets.CHROME_CLIENT_ID }}
+          CHROME_CLIENT_SECRET: ${{ secrets.CHROME_CLIENT_SECRET }}
+          CHROME_REFRESH_TOKEN: ${{ secrets.CHROME_REFRESH_TOKEN }}
+          FIREFOX_EXTENSION_ID: ${{ secrets.FIREFOX_EXTENSION_ID }}
+          FIREFOX_JWT_ISSUER: ${{ secrets.FIREFOX_JWT_ISSUER }}
+          FIREFOX_JWT_SECRET: ${{ secrets.FIREFOX_JWT_SECRET }}
+
+      # The stores get the build before the GitHub release is created: a rejected upload
+      # should not leave a published release advertising a version no store carries.
+      - name: Upload to the public store channels
+        if: steps.stores.outputs.chrome == 'true' || steps.stores.outputs.firefox == 'true'
+        run: |
+          set -euo pipefail
+          args=()
+          if [ "${CHROME_CONFIGURED}" = 'true' ]; then
+            args+=(--chrome-zip "$(echo .output/*-chrome.zip)")
+          fi
+          if [ "${FIREFOX_CONFIGURED}" = 'true' ]; then
+            # AMO needs the sources for a bundled extension, and refuses the upload
+            # without them, so the two zips always travel together.
+            args+=(--firefox-zip "$(echo .output/*-firefox.zip)")
+            args+=(--firefox-sources-zip "$(echo .output/*-sources.zip)")
+          fi
+          pnpm exec wxt submit "${args[@]}"
+        env:
+          CHROME_CONFIGURED: ${{ steps.stores.outputs.chrome }}
+          FIREFOX_CONFIGURED: ${{ steps.stores.outputs.firefox }}
+          CHROME_EXTENSION_ID: ${{ secrets.CHROME_EXTENSION_ID }}
+          CHROME_CLIENT_ID: ${{ secrets.CHROME_CLIENT_ID }}
+          CHROME_CLIENT_SECRET: ${{ secrets.CHROME_CLIENT_SECRET }}
+          CHROME_REFRESH_TOKEN: ${{ secrets.CHROME_REFRESH_TOKEN }}
+          # The public audience, submitted for review — the two ways this differs from
+          # the nightly upload.
+          CHROME_PUBLISH_TARGET: default
+          FIREFOX_EXTENSION_ID: ${{ secrets.FIREFOX_EXTENSION_ID }}
+          FIREFOX_JWT_ISSUER: ${{ secrets.FIREFOX_JWT_ISSUER }}
+          FIREFOX_JWT_SECRET: ${{ secrets.FIREFOX_JWT_SECRET }}
+          FIREFOX_CHANNEL: listed
+          # A manual run defaults to a dry run; the STORE_DRY_RUN repository variable
+          # forces one for tag pushes too.
+          DRY_RUN: ${{ (inputs.dry_run && 'true') || vars.STORE_DRY_RUN }}
+
+      # Same shape as the nightly: assets can only be attached while the release is a
+      # draft, and a published release can never be modified, so create then flip.
+      - name: Create draft release
+        id: draft
+        if: github.ref_type == 'tag' && !inputs.dry_run
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
+        with:
+          name: v${{ env.RELEASE_VERSION }}
+          tag_name: ${{ github.ref_name }}
+          draft: true
+          generate_release_notes: true
+          files: |
+            .output/*-chrome.zip
+            .output/*-firefox.zip
+            .output/*-sources.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish the release
+        if: steps.draft.outcome == 'success'
+        run: gh api --method PATCH "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}" -F draft=false
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_ID: ${{ steps.draft.outputs.id }}

@@ -135,6 +135,61 @@ Install dependencies with `pnpm install`.
 | `pnpm lint`          | Lint TypeScript with ESLint                           |
 | `pnpm typecheck`     | Type-check without emitting                           |
 
+## Publishing
+
+Uploads to the Chrome Web Store and to AMO are automated, through
+[`wxt submit`](https://wxt.dev/guide/essentials/publishing) (a wrapper around
+`publish-browser-extension`, which ships with WXT — nothing extra to install). Two
+workflows drive it, and the split matters: **nightlies never reach the public listings.**
+
+| Workflow      | Trigger              | Chrome                        | Firefox                      |
+| ------------- | -------------------- | ----------------------------- | ---------------------------- |
+| `nightly.yml` | 01:00 UTC (schedule) | `trustedTesters`              | `unlisted` (signed XPI)      |
+| `release.yml` | pushing a `v*` tag   | `default`, submitted publicly | `listed`, submitted publicly |
+
+A nightly is unreviewed code built from whatever landed on `main` that day. Sending it to
+the public channels would mean a review submission a day on each store and every user
+auto-updated onto code nobody reviewed, so nightlies go to each store's test channel: the
+public listing keeps serving the last release either way. Both workflows skip a store
+whose credentials are missing, so you can configure one store first and add the other
+later.
+
+### Versions
+
+Both stores reject a version they have already accepted, and `package.json` only moves on
+release, so CI stamps every uploadable build. Nightlies append the workflow run number
+(`2.0.0.412`) — monotonic, and inside the four-part / 0–65535-per-part format Chrome
+accepts. `wxt.config.ts` reads it from `WXT_EXTENSION_VERSION`; releases leave it unset and
+ship exactly what `package.json` declares.
+
+One consequence: a nightly version sorts **above** the package version it derives from, so
+a release must bump `package.json` rather than re-ship the version the nightlies were built
+from. Cutting a release is: bump `version`, merge, then tag that commit `v<version>` and
+push the tag — `release.yml` refuses to build when the tag and `package.json` disagree.
+
+### Credentials
+
+Run `pnpm exec wxt submit init` locally: it walks through both stores and prints the
+values. Add them as repository **secrets** (Settings → Secrets and variables → Actions).
+
+| Secret                                                             | Store  |
+| ------------------------------------------------------------------ | ------ |
+| `CHROME_EXTENSION_ID`                                              | Chrome |
+| `CHROME_CLIENT_ID`, `CHROME_CLIENT_SECRET`, `CHROME_REFRESH_TOKEN` | Chrome |
+| `FIREFOX_EXTENSION_ID`                                             | AMO    |
+| `FIREFOX_JWT_ISSUER`, `FIREFOX_JWT_SECRET`                         | AMO    |
+
+Two optional knobs, both repository **variables** rather than secrets:
+
+- `STORE_DRY_RUN=true` — every upload authenticates and validates but uploads nothing.
+  Worth setting while first wiring the credentials up.
+- The `store-release` environment gates `release.yml`. Adding required reviewers to it
+  (Settings → Environments) makes every public release wait for a human before uploading.
+
+`workflow_dispatch` on `nightly.yml` takes a `skip_store_upload` input for forcing a
+nightly build without touching the stores; `release.yml`'s manual runs default to a dry
+run.
+
 ## Compatibility contract
 
 The encryption format and API surface are fixed by the existing backend and the wider
