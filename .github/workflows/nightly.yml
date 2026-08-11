@@ -222,12 +222,16 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # A nightly is unreviewed code built from whatever landed on main that day, so it
-      # goes to each store's *test* channel, never to the public listing: Chrome's
-      # trusted-tester audience (the public listing keeps serving the last release) and
-      # an unlisted — signed but never listed — Firefox build. Shipping a nightly to
-      # everyone would mean a review submission a day and users auto-updated onto code
-      # nobody reviewed; publishing to the public channels is release.yml's job.
+      # While there is no stable release, the nightly *is* the published extension: it
+      # goes straight to both public listings, so early users get what landed on main
+      # rather than nothing. That is a deliberate pre-1.0 trade — every build is
+      # unreviewed code auto-updated onto every user, and each upload costs a review
+      # submission on each store.
+      #
+      # Once a stable release exists, flip this back: set CHROME_PUBLISH_TARGET to
+      # `trustedTesters` and FIREFOX_CHANNEL to `unlisted` in the upload step below, and
+      # the public channels become release.yml's job alone. Nothing else has to change —
+      # release.yml is already wired for it.
       #
       # Each store is uploaded to only when its credentials are present, so configuring
       # one store does not block on the other. `wxt submit` submits a store only when it
@@ -262,7 +266,7 @@ jobs:
           FIREFOX_JWT_ISSUER: ${{ secrets.FIREFOX_JWT_ISSUER }}
           FIREFOX_JWT_SECRET: ${{ secrets.FIREFOX_JWT_SECRET }}
 
-      - name: Upload the nightly to the store test channels
+      - name: Upload the nightly to the stores
         if: steps.stores.outputs.chrome == 'true' || steps.stores.outputs.firefox == 'true'
         run: |
           set -euo pipefail
@@ -284,11 +288,13 @@ jobs:
           CHROME_CLIENT_ID: ${{ secrets.CHROME_CLIENT_ID }}
           CHROME_CLIENT_SECRET: ${{ secrets.CHROME_CLIENT_SECRET }}
           CHROME_REFRESH_TOKEN: ${{ secrets.CHROME_REFRESH_TOKEN }}
-          CHROME_PUBLISH_TARGET: trustedTesters
+          # The public audience on both stores, submitted for review — see the note
+          # above for what to change once there is a stable release to protect.
+          CHROME_PUBLISH_TARGET: default
           FIREFOX_EXTENSION_ID: ${{ secrets.FIREFOX_EXTENSION_ID }}
           FIREFOX_JWT_ISSUER: ${{ secrets.FIREFOX_JWT_ISSUER }}
           FIREFOX_JWT_SECRET: ${{ secrets.FIREFOX_JWT_SECRET }}
-          FIREFOX_CHANNEL: unlisted
+          FIREFOX_CHANNEL: listed
           # Set the STORE_DRY_RUN repository variable to 'true' to exercise the whole
           # pipeline — credentials included — without uploading anything.
           DRY_RUN: ${{ vars.STORE_DRY_RUN }}

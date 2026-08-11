@@ -1,9 +1,12 @@
 name: Release
 
-# Publishing to the public store channels is deliberately tag-driven rather than
-# scheduled: every upload here is submitted for review and auto-updates every user, so it
-# happens when someone cuts a release, not once a night. Nightlies go to the stores' test
-# channels instead (see nightly.yml).
+# Cuts a stable release and publishes it to the public store channels, tag-driven rather
+# than scheduled: every upload here is submitted for review and auto-updates every user,
+# so it happens when someone decides to ship, not once a night.
+#
+# Until there is a first stable release, nightly.yml also uploads to the public channels
+# (there is nothing else for users to install). Once this workflow has shipped one, move
+# the nightly back to the stores' test channels — see the note in nightly.yml.
 #
 # Cutting a release is: bump `version` in package.json, merge it, then tag that commit
 # `v<version>` and push the tag. The version must be higher than every nightly built from

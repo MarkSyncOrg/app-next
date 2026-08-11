@@ -140,31 +140,60 @@ Install dependencies with `pnpm install`.
 Uploads to the Chrome Web Store and to AMO are automated, through
 [`wxt submit`](https://wxt.dev/guide/essentials/publishing) (a wrapper around
 `publish-browser-extension`, which ships with WXT — nothing extra to install). Two
-workflows drive it, and the split matters: **nightlies never reach the public listings.**
+workflows drive it:
 
 | Workflow      | Trigger              | Chrome                        | Firefox                      |
 | ------------- | -------------------- | ----------------------------- | ---------------------------- |
-| `nightly.yml` | 01:00 UTC (schedule) | `trustedTesters`              | `unlisted` (signed XPI)      |
+| `nightly.yml` | 01:00 UTC (schedule) | `default`, submitted publicly | `listed`, submitted publicly |
 | `release.yml` | pushing a `v*` tag   | `default`, submitted publicly | `listed`, submitted publicly |
 
-A nightly is unreviewed code built from whatever landed on `main` that day. Sending it to
-the public channels would mean a review submission a day on each store and every user
-auto-updated onto code nobody reviewed, so nightlies go to each store's test channel: the
-public listing keeps serving the last release either way. Both workflows skip a store
-whose credentials are missing, so you can configure one store first and add the other
-later.
+Both workflows skip a store whose credentials are missing, so you can configure one store
+first and add the other later.
+
+**The nightly publishing straight to the public listings is a pre-1.0 arrangement.** There
+is no stable release yet, so the nightly _is_ the published extension — early users get
+what landed on `main` rather than nothing. The cost is real and worth naming: every build
+is unreviewed code auto-updated onto every user, and each upload spends a review
+submission on each store.
+
+Once `release.yml` has shipped a first stable release, move the nightly back to the test
+channels — `CHROME_PUBLISH_TARGET: trustedTesters` and `FIREFOX_CHANNEL: unlisted` in the
+upload step of `nightly.yml`, two lines. The public listing then keeps serving the last
+release while nightlies reach only Chrome's trusted testers and an unlisted (signed, never
+listed) Firefox build. Nothing else has to change; `release.yml` is already wired for it.
 
 ### Versions
 
 Both stores reject a version they have already accepted, and `package.json` only moves on
-release, so CI stamps every uploadable build. Nightlies append the workflow run number
-(`2.0.0.412`) — monotonic, and inside the four-part / 0–65535-per-part format Chrome
-accepts. `wxt.config.ts` reads it from `WXT_EXTENSION_VERSION`; releases leave it unset and
-ship exactly what `package.json` declares.
+release, so CI stamps every uploadable build with its own version. Nightlies take the
+package version and append the workflow run number — `2.0.0` becomes `2.0.0.412`:
 
-One consequence: a nightly version sorts **above** the package version it derives from, so
-a release must bump `package.json` rather than re-ship the version the nightlies were built
-from. Cutting a release is: bump `version`, merge, then tag that commit `v<version>` and
+```
+base=${package_version%%-*}          # 2.0.0, minus any prerelease suffix
+WXT_EXTENSION_VERSION=${base}.${GITHUB_RUN_NUMBER}
+```
+
+`wxt.config.ts` reads `WXT_EXTENSION_VERSION` and, when set, uses it as the manifest
+`version`; the zip filenames follow from the manifest, so build and artifacts always agree.
+Releases leave it unset and ship exactly what `package.json` declares.
+
+The run number is what makes this work: it increments on every run of that workflow, never
+resets, and never repeats — so each nightly is unique and strictly newer than the last,
+including on days the build is skipped (the counter just leaves a gap). It also stays well
+inside Chrome's version format, which is at most four dot-separated integers of 0–65535
+each. Two things would break it, neither likely: renaming `nightly.yml` (the counter is
+per-workflow-file and would restart from 1) and a run number above 65535. A date-based
+component — days since a fixed epoch — is the usual alternative if either becomes a
+problem.
+
+Setting the version through the config rather than rewriting `package.json` is deliberate:
+a mutated working tree would make `wxt.config.ts` mark the build dirty, and every nightly
+would show `-dirty` in the build stamp shown in the popup.
+
+One consequence to keep in mind: a nightly version sorts **above** the package version it
+derives from (`2.0.0.412` > `2.0.0`), so the first stable release cannot be `2.0.0` — both
+stores would reject it as older than what nightlies already published. Bump to `2.0.1` or
+`2.1.0`. Cutting a release is: bump `version`, merge, then tag that commit `v<version>` and
 push the tag — `release.yml` refuses to build when the tag and `package.json` disagree.
 
 ### Credentials
