@@ -135,6 +135,109 @@ Install dependencies with `pnpm install`.
 | `pnpm lint`          | Lint TypeScript with ESLint                           |
 | `pnpm typecheck`     | Type-check without emitting                           |
 
+## Publishing
+
+Uploads to the Chrome Web Store and to AMO are automated, through
+[`wxt submit`](https://wxt.dev/guide/essentials/publishing) (a wrapper around
+`publish-browser-extension`, which ships with WXT — nothing extra to install). Two
+workflows drive it:
+
+| Workflow      | Trigger              | Chrome                        | Firefox                      |
+| ------------- | -------------------- | ----------------------------- | ---------------------------- |
+| `nightly.yml` | 01:00 UTC (schedule) | `default`, submitted publicly | `listed`, submitted publicly |
+| `release.yml` | pushing a `v*` tag   | `default`, submitted publicly | `listed`, submitted publicly |
+
+Both workflows skip a store whose credentials are missing, so you can configure one store
+first and add the other later.
+
+**The nightly publishing straight to the public listings is a pre-1.0 arrangement.** There
+is no stable release yet, so the nightly _is_ the published extension — early users get
+what landed on `main` rather than nothing. The cost is real and worth naming: every build
+is unreviewed code auto-updated onto every user, and each upload spends a review
+submission on each store.
+
+Once `release.yml` has shipped a first stable release, move the nightly back to the test
+channels — `CHROME_PUBLISH_TARGET: trustedTesters` and `FIREFOX_CHANNEL: unlisted` in the
+upload step of `nightly.yml`, two lines. The public listing then keeps serving the last
+release while nightlies reach only Chrome's trusted testers and an unlisted (signed, never
+listed) Firefox build. Nothing else has to change; `release.yml` is already wired for it.
+
+### A red nightly is usually a Chrome review still open
+
+The Chrome Web Store refuses a new package while the previous one is still in review — the
+API answers `Publish condition not met`, with no detail — so on any day a review runs past
+24 hours, the next nightly fails on its upload step. This is known and accepted for now:
+uploads happen after the GitHub release is created and published, so a failed upload never
+costs the artifacts, and the next nightly to run once the review clears carries the newer
+commit anyway. AMO does not have this problem; versions there are independent.
+
+If it turns into noise, the fix is to slow the Chrome uploads down (weekly, say) rather
+than to ignore the error — an upload failing for an unrelated reason looks exactly the
+same.
+
+### Versions
+
+Both stores reject a version they have already accepted, and `package.json` only moves on
+release, so CI stamps every uploadable build with its own version. A nightly is the
+package's **major.minor** with the workflow run number in the third slot — with
+`package.json` at `2.0.0`, nightlies are `2.0.412`, `2.0.415`, `2.0.418`:
+
+```
+series=2.0                           # major.minor, minus any prerelease suffix
+WXT_EXTENSION_VERSION=${series}.${GITHUB_RUN_NUMBER}
+```
+
+`wxt.config.ts` reads `WXT_EXTENSION_VERSION` and, when set, uses it as the manifest
+`version`; the zip filenames follow from the manifest, so build and artifacts always agree.
+Releases leave it unset and ship exactly what `package.json` declares.
+
+The run number is what makes this work: it increments on every run of that workflow, never
+resets, and never repeats — so each nightly is unique and strictly newer than the last,
+including on days the build is skipped (the counter just leaves a gap). It also stays well
+inside Chrome's version format, which is at most four dot-separated integers of 0–65535
+each. Two things would break it, neither likely: renaming `nightly.yml` (the counter is
+per-workflow-file and would restart from 1) and a run number above 65535. A date-based
+component — days since a fixed epoch — is the usual alternative if either becomes a
+problem.
+
+Setting the version through the config rather than rewriting `package.json` is deliberate:
+a mutated working tree would make `wxt.config.ts` mark the build dirty, and every nightly
+would show `-dirty` in the build stamp shown in the popup.
+
+**Nightlies occupy the patch component, so there are no patch releases while they
+publish.** Everything in the `2.0` series now sorts below `2.0.412`, which means a stable
+release has to bump at least the minor: `2.0.412` → `2.1.0`, never `2.0.0` or `2.0.1` —
+both stores would reject those as older than what nightlies already shipped. The next
+cycle's nightlies then become `2.1.<run>`, and the release after that `2.2.0`. If patch
+releases become necessary, widening the nightly back to four components
+(`<major>.<minor>.<patch>.<run>`) frees the patch slot again.
+
+Cutting a release is: bump `version`, merge, then tag that commit `v<version>` and push the
+tag — `release.yml` refuses to build when the tag and `package.json` disagree.
+
+### Credentials
+
+Run `pnpm exec wxt submit init` locally: it walks through both stores and prints the
+values. Add them as repository **secrets** (Settings → Secrets and variables → Actions).
+
+| Secret                                                             | Store  |
+| ------------------------------------------------------------------ | ------ |
+| `CHROME_EXTENSION_ID`                                              | Chrome |
+| `CHROME_CLIENT_ID`, `CHROME_CLIENT_SECRET`, `CHROME_REFRESH_TOKEN` | Chrome |
+| `FIREFOX_EXTENSION_ID`                                             | AMO    |
+| `FIREFOX_JWT_ISSUER`, `FIREFOX_JWT_SECRET`                         | AMO    |
+
+Two optional knobs, both repository **variables** rather than secrets:
+
+- `STORE_DRY_RUN=true` — every upload authenticates and validates but uploads nothing.
+  Worth setting while first wiring the credentials up.
+- The `store-release` environment gates `release.yml`. Adding required reviewers to it
+  (Settings → Environments) makes every public release wait for a human before uploading.
+
+`workflow_dispatch` on `nightly.yml` takes a `skip_store_upload` input for forcing a
+nightly build without touching the stores; `release.yml`'s manual runs default to a dry
+run.
+
 ## Compatibility contract
 
 The encryption format and API surface are fixed by the existing backend and the wider
