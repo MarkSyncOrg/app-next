@@ -165,12 +165,13 @@ listed) Firefox build. Nothing else has to change; `release.yml` is already wire
 ### Versions
 
 Both stores reject a version they have already accepted, and `package.json` only moves on
-release, so CI stamps every uploadable build with its own version. Nightlies take the
-package version and append the workflow run number — `2.0.0` becomes `2.0.0.412`:
+release, so CI stamps every uploadable build with its own version. A nightly is the
+package's **major.minor** with the workflow run number in the third slot — with
+`package.json` at `2.0.0`, nightlies are `2.0.412`, `2.0.415`, `2.0.418`:
 
 ```
-base=${package_version%%-*}          # 2.0.0, minus any prerelease suffix
-WXT_EXTENSION_VERSION=${base}.${GITHUB_RUN_NUMBER}
+series=2.0                           # major.minor, minus any prerelease suffix
+WXT_EXTENSION_VERSION=${series}.${GITHUB_RUN_NUMBER}
 ```
 
 `wxt.config.ts` reads `WXT_EXTENSION_VERSION` and, when set, uses it as the manifest
@@ -190,11 +191,16 @@ Setting the version through the config rather than rewriting `package.json` is d
 a mutated working tree would make `wxt.config.ts` mark the build dirty, and every nightly
 would show `-dirty` in the build stamp shown in the popup.
 
-One consequence to keep in mind: a nightly version sorts **above** the package version it
-derives from (`2.0.0.412` > `2.0.0`), so the first stable release cannot be `2.0.0` — both
-stores would reject it as older than what nightlies already published. Bump to `2.0.1` or
-`2.1.0`. Cutting a release is: bump `version`, merge, then tag that commit `v<version>` and
-push the tag — `release.yml` refuses to build when the tag and `package.json` disagree.
+**Nightlies occupy the patch component, so there are no patch releases while they
+publish.** Everything in the `2.0` series now sorts below `2.0.412`, which means a stable
+release has to bump at least the minor: `2.0.412` → `2.1.0`, never `2.0.0` or `2.0.1` —
+both stores would reject those as older than what nightlies already shipped. The next
+cycle's nightlies then become `2.1.<run>`, and the release after that `2.2.0`. If patch
+releases become necessary, widening the nightly back to four components
+(`<major>.<minor>.<patch>.<run>`) frees the patch slot again.
+
+Cutting a release is: bump `version`, merge, then tag that commit `v<version>` and push the
+tag — `release.yml` refuses to build when the tag and `package.json` disagree.
 
 ### Credentials
 

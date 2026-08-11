@@ -10,8 +10,8 @@ name: Release
 #
 # Cutting a release is: bump `version` in package.json, merge it, then tag that commit
 # `v<version>` and push the tag. The version must be higher than every nightly built from
-# the previous one — nightlies append a fourth component (`2.0.0.<run>`), which sorts
-# above the `2.0.0` they came from, so a release always bumps at least the patch.
+# the previous one, and nightlies put the run number in the patch slot (`2.0.<run>`) — so
+# a release bumps at least the minor: 2.0.412 is followed by 2.1.0, never 2.0.1.
 on:
   push:
     tags: ['v*']

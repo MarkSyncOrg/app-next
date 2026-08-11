@@ -116,25 +116,27 @@ jobs:
       - run: pnpm install --no-frozen-lockfile
 
       # The stores reject a version they have already accepted, so a nightly cannot ship
-      # the package version — that one only moves on release. Each nightly appends the
-      # run number, which is monotonic across the workflow's whole history and never
-      # resets, giving `2.0.0.<run>`: unique, always newer than the last nightly, and
-      # within Chrome's four-part / 0–65535-per-part version format. Read by
-      # wxt.config.ts, so the manifest and the zip filenames agree.
+      # the package version — that one only moves on release. A nightly is the package's
+      # major.minor with the workflow run number in the third slot, giving `2.0.<run>`:
+      # the run number is monotonic across the workflow's whole history and never resets,
+      # so every nightly is unique and newer than the last, and 0–65535 leaves far more
+      # room than the schedule can spend. Read by wxt.config.ts, so the manifest and the
+      # zip filenames agree.
       #
-      # Because the nightly version sorts *above* the package version it is derived from
-      # (2.0.0.412 > 2.0.0), the release that closes a cycle must carry a bumped package
-      # version — 2.0.1 or 2.1.0, never a re-released 2.0.0. See "Publishing" in README.md.
+      # The cost of the short form is that the nightly occupies the patch component, so
+      # there are no patch releases to hand out while nightlies publish: a stable release
+      # has to bump at least the minor (2.0.412 → 2.1.0), because anything in the 2.0
+      # series now sorts below the nightlies. See "Publishing" in README.md.
       - name: Compute the nightly version
         run: |
           set -euo pipefail
           package_version=$(node -p "require('./package.json').version")
-          # Strip any prerelease/build suffix: browsers only accept plain numbers.
-          base=${package_version%%-*}
+          # major.minor, dropping any prerelease suffix: browsers only accept plain numbers.
+          series=$(node -p "require('./package.json').version.split('-')[0].split('.').slice(0, 2).join('.')")
           {
             echo "RELEASE_VERSION=${package_version}"
-            echo "NIGHTLY_VERSION=${base}.${GITHUB_RUN_NUMBER}"
-            echo "WXT_EXTENSION_VERSION=${base}.${GITHUB_RUN_NUMBER}"
+            echo "NIGHTLY_VERSION=${series}.${GITHUB_RUN_NUMBER}"
+            echo "WXT_EXTENSION_VERSION=${series}.${GITHUB_RUN_NUMBER}"
           } >> "$GITHUB_ENV"
 
       - name: Package Chromium
