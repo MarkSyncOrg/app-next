@@ -162,6 +162,19 @@ upload step of `nightly.yml`, two lines. The public listing then keeps serving t
 release while nightlies reach only Chrome's trusted testers and an unlisted (signed, never
 listed) Firefox build. Nothing else has to change; `release.yml` is already wired for it.
 
+### A red nightly is usually a Chrome review still open
+
+The Chrome Web Store refuses a new package while the previous one is still in review — the
+API answers `Publish condition not met`, with no detail — so on any day a review runs past
+24 hours, the next nightly fails on its upload step. This is known and accepted for now:
+uploads happen after the GitHub release is created and published, so a failed upload never
+costs the artifacts, and the next nightly to run once the review clears carries the newer
+commit anyway. AMO does not have this problem; versions there are independent.
+
+If it turns into noise, the fix is to slow the Chrome uploads down (weekly, say) rather
+than to ignore the error — an upload failing for an unrelated reason looks exactly the
+same.
+
 ### Versions
 
 Both stores reject a version they have already accepted, and `package.json` only moves on

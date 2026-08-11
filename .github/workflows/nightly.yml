@@ -238,6 +238,13 @@ jobs:
       # Each store is uploaded to only when its credentials are present, so configuring
       # one store does not block on the other. `wxt submit` submits a store only when it
       # is given a zip, which is how the flags below select them.
+      #
+      # Expect this step to fail on the days a Chrome review is still open: the Web Store
+      # refuses a new package while the previous one is in review ("Publish condition not
+      # met"). Accepted rather than worked around — the release above is already published
+      # by then, so nothing is lost, and the next nightly carries the newer commit. The
+      # fix, if it becomes noise, is to upload to Chrome less often; not to swallow the
+      # error, which would hide the uploads that fail for real reasons.
       - name: Check which store credentials are configured
         id: stores
         if: ${{ !inputs.skip_store_upload }}
