@@ -50,7 +50,11 @@ export default defineConfig({
     description: 'Sync your bookmarks securely across browsers and devices.',
     ...(versionOverride ? { version: versionOverride } : {}),
     homepage_url: 'https://github.com/MarkSyncOrg/app-next',
-    permissions: ['storage', 'bookmarks', 'alarms'],
+    // `activeTab` grants the popup the URL and title of the tab the user was on when
+    // they opened it, and nothing else — no browsing history, and no access at all once
+    // the popup closes. That is what lets the popup offer to describe and tag the page
+    // you are looking at without the install-time warning a `tabs` permission carries.
+    permissions: ['storage', 'bookmarks', 'alarms', 'activeTab'],
     // The official service. Self-hosted/custom service URLs are requested at runtime
     // via optional host permissions so users only grant what they actually use.
     host_permissions: ['https://api.xbrowsersync.org/*', ...(extraHost ? [extraHost] : [])],

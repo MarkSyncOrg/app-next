@@ -78,6 +78,35 @@
 
       <!-- Status view: shown when sync is enabled -->
       <section id="status" hidden>
+        <!-- Description and tags for the page in the active tab. No browser can store
+             either on a bookmark, so they live in the sync alongside it; this is where
+             they are edited. Hidden for pages that cannot be bookmarked into a sync
+             (the extension's own pages, about:/chrome:// URLs, and so on). -->
+        <form id="page-meta" class="page-meta" hidden>
+          <h2>This page</h2>
+          <p id="page-meta-title" class="page-meta-title"></p>
+          <p id="page-meta-hint" class="field-hint" hidden></p>
+
+          <label>
+            Description
+            <textarea id="page-description" rows="2" spellcheck="true"></textarea>
+          </label>
+          <p id="page-description-count" class="field-hint"></p>
+
+          <label>
+            Tags
+            <input
+              id="page-tags"
+              type="text"
+              placeholder="comma, separated"
+              autocomplete="off"
+              spellcheck="false"
+            />
+          </label>
+
+          <button id="page-meta-save" type="submit">Save</button>
+        </form>
+
         <dl>
           <dt>Service</dt>
           <dd id="status-service">

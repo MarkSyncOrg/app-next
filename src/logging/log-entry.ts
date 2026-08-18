@@ -47,6 +47,25 @@ export function truncate(text: string, maxLength = MAX_VALUE_LENGTH): string {
 }
 
 /**
+ * Loggable form of a bookmark URL: its origin, or `'invalid-url'`.
+ *
+ * Bookmark titles and full URLs are never logged — the debug log is downloadable and
+ * gets attached to bug reports, and a user's bookmarks are exactly the thing they would
+ * not want to hand over with it. The origin is enough to tell which entry a line is
+ * about without disclosing the page.
+ */
+export function urlOrigin(url: string | undefined): string {
+  if (!url) {
+    return 'none';
+  }
+  try {
+    return new URL(url).origin;
+  } catch {
+    return 'invalid-url';
+  }
+}
+
+/**
  * JSON-stringifies a context object without ever throwing: cycles, `BigInt`, `Error`
  * and non-serialisable values are all reduced to something printable. Logging must
  * never be able to break the operation it is describing.

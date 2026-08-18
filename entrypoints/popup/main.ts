@@ -1,5 +1,9 @@
 import { browser } from 'wxt/browser';
 import {
+  DESCRIPTION_MAX_LENGTH,
+  formatTags,
+  isSafeBookmarkUrl,
+  parseTags,
   renderSyncIdQrSvg,
   type SyncDirection,
   type SyncOutcome,
@@ -164,6 +168,7 @@ async function render(): Promise<void> {
     el('status-direction').textContent = directionLabel ?? '';
     currentSyncId = status.syncId ?? '';
     hideQr();
+    await renderPageMeta();
 
     // Deliberately not awaited: these are best-effort network round-trips, and every
     // caller of render() runs inside withBusy, so awaiting them here would keep the
@@ -363,6 +368,125 @@ function renderServiceMessage(html: string): DocumentFragment {
   appendSanitised(parsed.body, fragment);
   return fragment;
 }
+
+/* ---- Description and tags for the active tab ------------------------------------- */
+
+const pageMetaForm = el<HTMLFormElement>('page-meta');
+const pageMetaTitle = el('page-meta-title');
+const pageMetaHint = el('page-meta-hint');
+const pageDescription = el<HTMLTextAreaElement>('page-description');
+const pageDescriptionCount = el('page-description-count');
+const pageTags = el<HTMLInputElement>('page-tags');
+const pageMetaSave = el<HTMLButtonElement>('page-meta-save');
+
+// The model trims a longer description at a word boundary, so a hard cap here keeps the
+// field honest: what the user types is what gets stored.
+pageDescription.maxLength = DESCRIPTION_MAX_LENGTH;
+
+/** The active tab's URL and title, once the editor has resolved them. */
+interface ActivePage {
+  url: string;
+  title: string;
+}
+
+let activePage: ActivePage | undefined;
+/** Whether the active page is already bookmarked, which decides what saving does. */
+let activePageBookmarked = false;
+
+/**
+ * The page in the active tab, or undefined when there is nothing bookmarkable there.
+ *
+ * The URL and title are only readable because of the `activeTab` permission, which the
+ * browser grants for the tab the user was on when they opened the popup — and only for
+ * as long as it is open. That is why the extension can offer this without asking for
+ * access to browsing history.
+ */
+async function readActivePage(): Promise<ActivePage | undefined> {
+  const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
+  const url = tab?.url;
+  // isSafeBookmarkUrl is the same check the sync applies, so the editor appears exactly
+  // when the page could actually be synced — never on about:/chrome:// pages, the
+  // extension's own pages, or anything else the sync would refuse to carry.
+  if (!url || !isSafeBookmarkUrl(url)) {
+    return undefined;
+  }
+  return { url, title: tab.title ?? url };
+}
+
+/** Updates the character counter under the description field. */
+function renderDescriptionCount(): void {
+  const used = pageDescription.value.length;
+  pageDescriptionCount.textContent = `${used} / ${DESCRIPTION_MAX_LENGTH} characters`;
+}
+
+pageDescription.addEventListener('input', renderDescriptionCount);
+
+/**
+ * Fills in the editor for the active tab, or hides it when the page cannot be
+ * bookmarked. Best-effort, like the service panels: a failure here must not take the
+ * sync status down with it.
+ */
+async function renderPageMeta(): Promise<void> {
+  try {
+    activePage = await readActivePage();
+    if (!activePage) {
+      pageMetaForm.hidden = true;
+      await log.debug('No bookmarkable page in the active tab');
+      return;
+    }
+
+    const meta = await send({ type: 'getBookmarkMetadata', url: activePage.url });
+    activePageBookmarked = meta.bookmarked;
+    pageMetaTitle.textContent = meta.title ?? activePage.title;
+    pageMetaTitle.title = activePage.url;
+    pageDescription.value = meta.description ?? '';
+    pageTags.value = formatTags(meta.tags);
+    renderDescriptionCount();
+
+    pageMetaSave.textContent = meta.bookmarked ? 'Save' : 'Add bookmark';
+    // Two things are worth saying out loud, and only one can ever apply: that saving
+    // will create the bookmark, or that the page is bookmarked more than once and every
+    // copy gets the same description and tags.
+    if (!meta.bookmarked) {
+      pageMetaHint.textContent = 'Not bookmarked yet — saving adds it to your other bookmarks.';
+      pageMetaHint.hidden = false;
+    } else if (meta.matches > 1) {
+      pageMetaHint.textContent = `Bookmarked ${meta.matches} times; all copies will be updated.`;
+      pageMetaHint.hidden = false;
+    } else {
+      pageMetaHint.hidden = true;
+    }
+    pageMetaForm.hidden = false;
+  } catch (error) {
+    await log.debug('Could not load the page editor', {
+      errorMessage: (error as Error).message,
+    });
+    pageMetaForm.hidden = true;
+  }
+}
+
+pageMetaForm.addEventListener('submit', (event) => {
+  event.preventDefault();
+  clearMessage();
+  const page = activePage;
+  if (!page) {
+    return;
+  }
+  void withBusy('Save page metadata', pageMetaSave, async () => {
+    // Normalised before sending, so what leaves the popup is already what will be
+    // stored; the worker normalises again because it must not trust its callers.
+    const tags = parseTags(pageTags.value);
+    const description = pageDescription.value.trim();
+    if (activePageBookmarked) {
+      await send({ type: 'setBookmarkMetadata', url: page.url, description, tags });
+      showMessage('Saved.');
+    } else {
+      await send({ type: 'addBookmark', url: page.url, title: page.title, description, tags });
+      showMessage('Bookmark added.');
+    }
+    await renderPageMeta();
+  });
+});
 
 const qrFigure = el('qr');
 const qrCanvas = el('qr-canvas');
