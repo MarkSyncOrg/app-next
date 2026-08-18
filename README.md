@@ -35,10 +35,58 @@ changed, and **three-way merge when both changed** so neither side's edits are l
 title, bookmarks by URL, separators by position) rather than per-operation change
 tracking; on a genuine attribute conflict, remote wins, so every device converges
 deterministically. Per-operation change tracking (as in the legacy client) is still
-future work.
+future work. A device can also be restricted to half of that — see
+[One-way sync](#one-way-sync).
 
 The browser↔xBrowserSync bookmark mapping (`src/background/webext-bookmark-provider.ts`)
 is the one piece that still needs validation against real Chrome/Firefox profiles.
+
+### One-way sync
+
+By default every device both sends and receives. **Sync direction** (options page) narrows
+that per device, for when one browser should feed another without anything coming back —
+so a second browser's bookmark storage can never push its quirks into the sync:
+
+| Direction        | This device                                                         |
+| ---------------- | ------------------------------------------------------------------- |
+| **Two-way**      | Sends and receives; both sides' edits are merged (the default).     |
+| **Send only**    | Uploads its bookmarks; never applies the service's.                 |
+| **Receive only** | Mirrors the service; never uploads, and undoes its own local edits. |
+
+A one-way sync is the pair: set the source browser to **send only** and every other
+browser to **receive only**. The direction is asked for **at setup**, in the popup, as well
+as being changeable later — otherwise the first exchange would run two-way before the user
+could correct it, and that is the one exchange the setting cannot undo afterwards. The
+setup hint spells out which side survives it, because that depends on the direction _and_
+on whether a sync is being created or joined:
+
+- **Creating** a sync always seeds it from this browser, whatever the direction. On a
+  receive-only device that seed is the last thing it ever sends.
+- **Joining** one as send only uploads this browser's bookmarks over what the sync holds;
+  joining it any other way replaces this browser's bookmarks with the sync's. (Joining
+  still downloads and decrypts the existing payload first either way — that is what proves
+  the password is right before anything is overwritten.)
+
+The direction then holds everywhere, not just for the "Update Sync" button — background
+sync, the automatic push on a bookmark edit, backup restore and the conflict-recovery
+actions all respect it, and the recovery action that would go against it is greyed out. It
+is a per-device setting stored locally, so each browser is configured on its own and the
+service is not involved.
+
+A send-only device wins outright: it uploads over whatever the service holds rather than
+merging, since it is not allowed to resolve a conflict by pulling. A receive-only device
+is the mirror image — a remote change is applied over local edits, and local edits made
+while the service sat still are undone from the last-synced tree, so the copy cannot drift
+silently. Both report what they did in the popup ("Remote changes ignored", "Local changes
+undone") and in the debug log.
+
+**Changing your mind later** is safe in both directions. A send-only device never records
+a revision it declined to apply, so switching it back to two-way makes it pull what it
+skipped — or three-way merge, if it has local edits of its own — instead of believing it
+was already up to date. Switching a receive-only device to two-way needs no repair at all:
+local edits it would have undone are simply pushed instead. The one thing to know is that
+the change takes effect from the _next_ sync, so a receive-only device still undoes edits
+made before you switch it.
 
 ### Settings, backup & logs (options page)
 
@@ -60,14 +108,17 @@ Settings:
 - **Auto-sync** — background sync interval (off / 15 / 30 / 60 min); drives the alarm.
 - **Sync bookmarks toolbar** — include the browser's toolbar/bar in the sync.
 - **Sync changes automatically** — push local bookmark edits as they happen.
+- **Sync direction** — two-way (default), send only, or receive only; also asked for at
+  setup. See [One-way sync](#one-way-sync).
 
 Backup & restore:
 
 - **Export** the current bookmarks to an unencrypted backup file
   (`xbs_backup_<timestamp>.txt`, xBrowserSync-compatible; credentials are never written).
 - **Restore** from a backup file (current or legacy shape); restoring replaces the
-  current bookmarks and pushes them if sync is enabled. Scheduled auto-backup is not
-  implemented (MV3 cannot reliably write files on a timer).
+  current bookmarks and pushes them if sync is enabled (a receive-only device restores
+  locally and uploads nothing). Scheduled auto-backup is not implemented (MV3 cannot
+  reliably write files on a timer).
 
 Debug log:
 

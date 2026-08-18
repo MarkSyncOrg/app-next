@@ -39,3 +39,34 @@ test('log entries from the options page reach the worker log', async ({ context,
     await expect(page.locator('#log-output')).toContainText('[sync] Settings updated');
   }).toPass();
 });
+
+test('the sync direction selector drives the hint and the recovery buttons', async ({
+  context,
+  extensionId,
+}) => {
+  const page = await context.newPage();
+  await page.goto(`chrome-extension://${extensionId}/options.html`);
+
+  // Two-way by default: nothing is one-way until the user says so.
+  await expect(page.locator('#set-direction')).toHaveValue('two-way');
+  await expect(page.locator('#direction-hint')).toContainText('sends and receives');
+  await expect(page.locator('#force-pull')).toBeEnabled();
+  await expect(page.locator('#force-push')).toBeEnabled();
+
+  // Send only: the device never applies the server's tree, so force pull is out.
+  await page.selectOption('#set-direction', 'push-only');
+  await expect(page.locator('#direction-hint')).toContainText('only sends');
+  await expect(page.locator('#force-pull')).toBeDisabled();
+  await expect(page.locator('#force-push')).toBeEnabled();
+
+  // Receive only: the mirror never uploads, so force push and sync-on-change are out.
+  await page.selectOption('#set-direction', 'pull-only');
+  await expect(page.locator('#direction-hint')).toContainText('only receives');
+  await expect(page.locator('#force-push')).toBeDisabled();
+  await expect(page.locator('#force-pull')).toBeEnabled();
+  await expect(page.locator('#set-on-change')).toBeDisabled();
+
+  // The setting is persisted by the worker, not just held in the page.
+  await page.reload();
+  await expect(page.locator('#set-direction')).toHaveValue('pull-only');
+});

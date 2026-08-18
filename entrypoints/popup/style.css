@@ -62,10 +62,26 @@ body {
 }
 
 #app {
-  padding: 16px;
+  padding: 14px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
+  /* The popup sizes itself to this element, so its height follows the content and
+     changes with the form: showing the sync-ID field or a direction hint makes the
+     window taller, hiding them makes it shorter. The only fixed part is the ceiling.
+
+     A browser caps a popup around 600px and then clips it, with no scrollbar of its
+     own — which is how the submit button became unreachable on a tall setup form. The
+     cap therefore lives here, on the element that can scroll: put on <body> it does
+     nothing, because a body's overflow is propagated to the viewport and the element
+     itself is left scrolling nothing.
+
+     Deliberately a plain length and not `min(600px, 100vh)`: viewport units inside an
+     extension popup are resolved against a viewport that is still being decided from
+     this very element's height, and a browser that answers small collapses the whole
+     window. A length cannot be misread. */
+  max-height: 600px;
+  overflow-y: auto;
 }
 
 .app-header {
@@ -99,7 +115,9 @@ form,
 section {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  /* Tight enough that joining an existing sync — the longest form — still fits inside the
+     browser's popup ceiling without scrolling. */
+  gap: 9px;
 }
 
 label {
@@ -107,14 +125,6 @@ label {
   flex-direction: column;
   gap: 4px;
   font-weight: 600;
-}
-
-label.radio,
-label.checkbox {
-  flex-direction: row;
-  align-items: center;
-  gap: 8px;
-  font-weight: 400;
 }
 
 input[type='url'],

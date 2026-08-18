@@ -56,6 +56,15 @@
           <input type="checkbox" id="set-on-change" />
           Sync changes automatically
         </label>
+        <label>
+          Sync direction
+          <select id="set-direction">
+            <option value="two-way">Two-way (send and receive)</option>
+            <option value="push-only">Send only (source)</option>
+            <option value="pull-only">Receive only (mirror)</option>
+          </select>
+        </label>
+        <p class="hint" id="direction-hint"></p>
       </section>
 
       <section class="card">
@@ -81,7 +90,8 @@
         <p class="hint">
           Use these only when sync is stuck in a conflict. Force pull discards this device's
           bookmarks and replaces them with the server copy. Force push overwrites the server with
-          this device's bookmarks. Both bypass the usual conflict check.
+          this device's bookmarks. Both bypass the usual conflict check, but not the sync direction:
+          the one that would send or receive against it is unavailable.
         </p>
         <div class="actions">
           <button id="force-pull" type="button" class="secondary">Force pull from server</button>

@@ -3,6 +3,7 @@ import type {
   Bookmark,
   ServiceInfo,
   Settings,
+  SyncDirection,
   SyncOutcome,
   SyncStatus,
 } from '@marksyncorg/core';
@@ -14,8 +15,17 @@ export type SyncRequest =
   | { type: 'getStatus' }
   | { type: 'getServiceInfo'; serviceUrl: string }
   | { type: 'getSyncUsage' }
-  | { type: 'enableNewSync'; serviceUrl: string; password: string }
-  | { type: 'enableExistingSync'; serviceUrl: string; syncId: string; password: string }
+  // `direction` is stored as the device's setting before the sync is enabled, so the
+  // very first exchange already obeys it rather than running two-way and being corrected
+  // from the options page afterwards.
+  | { type: 'enableNewSync'; serviceUrl: string; password: string; direction: SyncDirection }
+  | {
+      type: 'enableExistingSync';
+      serviceUrl: string;
+      syncId: string;
+      password: string;
+      direction: SyncDirection;
+    }
   | { type: 'sync' }
   | { type: 'forcePull' }
   | { type: 'forcePush' }

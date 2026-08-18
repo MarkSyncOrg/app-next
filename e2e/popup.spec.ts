@@ -49,3 +49,26 @@ test('setup form links to the public sync servers list', async ({ context, exten
   await expect(link).toHaveAttribute('target', '_blank');
   await expect(link).toHaveAttribute('rel', 'noopener noreferrer');
 });
+
+test('setup form offers a sync direction and explains the first exchange', async ({
+  context,
+  extensionId,
+}) => {
+  const page = await context.newPage();
+  await page.goto(`chrome-extension://${extensionId}/popup.html`);
+
+  // Two-way by default, so setup behaves as it always did — and says nothing extra.
+  await expect(page.locator('#setup-direction')).toHaveValue('two-way');
+  await expect(page.locator('#setup-direction-hint')).toBeHidden();
+
+  // Creating a sync always seeds it from this browser, whatever the direction.
+  await page.selectOption('#setup-direction', 'pull-only');
+  await expect(page.locator('#setup-direction-hint')).toBeVisible();
+  await expect(page.locator('#setup-direction-hint')).toContainText('the last thing it sends');
+
+  // Joining one is where the direction decides which side survives.
+  await page.selectOption('#setup-mode', 'existing');
+  await expect(page.locator('#setup-direction-hint')).toContainText('Replaced by');
+  await page.selectOption('#setup-direction', 'push-only');
+  await expect(page.locator('#setup-direction-hint')).toContainText('replaces the bookmarks');
+});
