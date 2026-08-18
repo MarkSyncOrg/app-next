@@ -13,6 +13,7 @@ import type { LogEntry } from './logging/log-entry';
 export type SyncRequest =
   | { type: 'getStatus' }
   | { type: 'getServiceInfo'; serviceUrl: string }
+  | { type: 'getSyncUsage' }
   | { type: 'enableNewSync'; serviceUrl: string; password: string }
   | { type: 'enableExistingSync'; serviceUrl: string; syncId: string; password: string }
   | { type: 'sync' }
@@ -35,6 +36,7 @@ export type SyncRequestType = SyncRequest['type'];
 export interface SyncResultData {
   getStatus: SyncStatus;
   getServiceInfo: ServiceInfo;
+  getSyncUsage: { usedBytes: number };
   enableNewSync: { syncId: string };
   enableExistingSync: null;
   sync: { outcome: SyncOutcome };
@@ -57,6 +59,7 @@ export type SyncResponse<T> =
 const REQUEST_TYPES: readonly SyncRequestType[] = [
   'getStatus',
   'getServiceInfo',
+  'getSyncUsage',
   'enableNewSync',
   'enableExistingSync',
   'sync',

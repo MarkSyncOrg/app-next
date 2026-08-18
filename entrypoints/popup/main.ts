@@ -104,6 +104,15 @@ function formatTimestamp(iso: string | undefined): string {
 /** The sync ID currently displayed, used to render its QR code on demand. */
 let currentSyncId = '';
 
+/** How long the popup waits for a best-effort service round-trip before giving up. */
+const SERVICE_REQUEST_TIMEOUT_MS = 8000;
+
+/**
+ * Bumped once per render, so a response that arrives after a later render has already
+ * repainted (or after sync was disabled) is discarded instead of overwriting it.
+ */
+let renderGeneration = 0;
+
 async function render(): Promise<void> {
   const status = await send({ type: 'getStatus' });
   await log.debug('Rendering status', {
@@ -114,12 +123,209 @@ async function render(): Promise<void> {
   statusView.hidden = !status.enabled;
 
   if (status.enabled) {
-    el('status-service').textContent = status.serviceUrl ?? '';
+    el('status-service-url').textContent = status.serviceUrl ?? '';
     el('status-sync-id').textContent = status.syncId ?? '';
     el('status-last-updated').textContent = formatTimestamp(status.lastUpdated);
     currentSyncId = status.syncId ?? '';
     hideQr();
+
+    // Deliberately not awaited: these are best-effort network round-trips, and every
+    // caller of render() runs inside withBusy, so awaiting them here would keep the
+    // button that triggered the render disabled until the service decides to answer.
+    renderGeneration += 1;
+    void refreshServicePanels(status.serviceUrl, renderGeneration);
   }
+}
+
+/**
+ * Rejects if `promise` has not settled in time. The request itself is not cancellable
+ * from the popup, but the panel waiting on it stops hanging: a service that accepts the
+ * connection and then never answers would otherwise leave the badge and the usage bar
+ * pending for as long as the popup stays open.
+ */
+function withTimeout<T>(promise: Promise<T>, what: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const expiry = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${what} timed out`)), SERVICE_REQUEST_TIMEOUT_MS);
+  });
+  return Promise.race([promise, expiry]).finally(() => {
+    clearTimeout(timer);
+  });
+}
+
+/** Fills in the service badge, operator message and data-usage bar for one render. */
+async function refreshServicePanels(
+  serviceUrl: string | undefined,
+  generation: number,
+): Promise<void> {
+  const maxSyncSize = serviceUrl ? await renderServiceHealth(serviceUrl, generation) : undefined;
+  if (generation === renderGeneration) {
+    await renderDataUsage(maxSyncSize, generation);
+  }
+}
+
+const SERVICE_STATUS_BADGE: Record<number, { symbol: string; className: string; label: string }> = {
+  1: { symbol: '✓', className: 'badge-online', label: 'Online' },
+  2: { symbol: '✕', className: 'badge-offline', label: 'Offline' },
+  3: { symbol: '⚠', className: 'badge-limited', label: 'Online, not accepting new syncs' },
+};
+
+/**
+ * Fetches the service's status/version/operator message and renders them next to the
+ * service URL. Best-effort: a service that can't be reached just hides the badge and
+ * message rather than failing the whole status view.
+ */
+async function renderServiceHealth(
+  serviceUrl: string,
+  generation: number,
+): Promise<number | undefined> {
+  const badge = el('status-service-badge');
+  const messageEl = el('service-message');
+  try {
+    const info = await withTimeout(send({ type: 'getServiceInfo', serviceUrl }), 'Service info');
+    if (generation !== renderGeneration) {
+      return undefined;
+    }
+    const known = SERVICE_STATUS_BADGE[info.status];
+    const label = known?.label ?? `Unknown status (${info.status})`;
+    badge.textContent = known?.symbol ?? '?';
+    badge.title = label;
+    // The glyph and its colour are the only visual cue, so the state has to be spelled
+    // out for assistive technology as well (the span is role="img" in the markup).
+    badge.setAttribute('aria-label', label);
+    badge.className = `badge ${known?.className ?? ''}`;
+    badge.hidden = false;
+
+    if (info.message) {
+      messageEl.replaceChildren(renderServiceMessage(info.message));
+      messageEl.hidden = false;
+    } else {
+      messageEl.hidden = true;
+    }
+    return info.maxSyncSize;
+  } catch (error) {
+    await log.debug('Could not fetch service info', { errorMessage: (error as Error).message });
+    if (generation === renderGeneration) {
+      badge.hidden = true;
+      messageEl.hidden = true;
+    }
+    return undefined;
+  }
+}
+
+/**
+ * Fetches how much of the sync's storage quota is used and renders the usage bar.
+ * Best-effort, same as {@link renderServiceHealth}: hidden rather than shown broken.
+ */
+async function renderDataUsage(maxSyncSize: number | undefined, generation: number): Promise<void> {
+  const container = el('data-usage');
+  if (maxSyncSize === undefined || maxSyncSize <= 0) {
+    container.hidden = true;
+    return;
+  }
+  try {
+    const { usedBytes } = await withTimeout(send({ type: 'getSyncUsage' }), 'Sync data usage');
+    if (generation !== renderGeneration) {
+      return;
+    }
+    const percent = Math.min(100, Math.round((usedBytes / maxSyncSize) * 100));
+    el('data-usage-percent').textContent = `${percent}%`;
+    el('data-usage-fill').style.width = `${percent}%`;
+    el('data-usage-detail').textContent =
+      `${formatBytes(usedBytes)} of ${formatBytes(maxSyncSize)}`;
+    container.hidden = false;
+  } catch (error) {
+    await log.debug('Could not fetch sync data usage', { errorMessage: (error as Error).message });
+    if (generation === renderGeneration) {
+      container.hidden = true;
+    }
+  }
+}
+
+/** Formats a byte count as a short human-readable size (e.g. "77 KB", "1.2 MB"). */
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
+  const units = ['KB', 'MB', 'GB'];
+  let value = bytes / 1024;
+  let unitIndex = 0;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+  return `${value < 10 ? value.toFixed(1) : Math.round(value)} ${units[unitIndex]}`;
+}
+
+/**
+ * Whether a value is safe to use as a link href (only ever an absolute http/https URL).
+ *
+ * Parsed with no base URL on purpose: resolving against one would accept a relative
+ * (`/foo`) or protocol-relative (`//host/x`) href, which the anchor would then resolve
+ * against the popup's own `chrome-extension://` origin — pointing back inside the
+ * extension rather than at the service operator's site.
+ */
+function isSafeHttpUrl(value: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return false;
+  }
+  return url.protocol === 'https:' || url.protocol === 'http:';
+}
+
+/** Elements the service operator message is allowed to use once sanitised. */
+const MESSAGE_ALLOWED_TAGS = new Set(['A', 'B', 'STRONG', 'EM', 'I', 'BR', 'SPAN', 'P']);
+
+/**
+ * Copies `source`'s children into `target`, dropping any element that is not on the
+ * small allowlist (unwrapping it to keep its safe text/descendants) and, for the
+ * elements that are kept, stripping every attribute except a validated `href` on `<a>`.
+ * Recurses instead of using `innerHTML`, so nothing in the source — event handlers,
+ * `javascript:` URLs, `style` attributes — can execute once adopted into the popup.
+ */
+function appendSanitised(source: Node, target: Node): void {
+  source.childNodes.forEach((child) => {
+    if (child.nodeType === Node.TEXT_NODE) {
+      target.appendChild(document.createTextNode(child.textContent ?? ''));
+      return;
+    }
+    if (child.nodeType !== Node.ELEMENT_NODE) {
+      return;
+    }
+    const element = child as Element;
+    const isLink = element.tagName === 'A';
+    const href = isLink ? (element.getAttribute('href') ?? '') : '';
+    // Unwrap anything off the allowlist, and any link we would refuse to give an href
+    // to — an anchor without one renders as inert text, so keep the contents and drop
+    // the element itself.
+    if (!MESSAGE_ALLOWED_TAGS.has(element.tagName) || (isLink && !isSafeHttpUrl(href))) {
+      appendSanitised(element, target);
+      return;
+    }
+    const clean = document.createElement(element.tagName.toLowerCase());
+    if (isLink) {
+      clean.setAttribute('href', href);
+      clean.setAttribute('target', '_blank');
+      clean.setAttribute('rel', 'noopener noreferrer');
+    }
+    appendSanitised(element, clean);
+    target.appendChild(clean);
+  });
+}
+
+/**
+ * Sanitises the service operator message. The API only strips `<script>` tags
+ * server-side, so this is otherwise-untrusted HTML from whichever service the user
+ * pointed the extension at — parsed into an inert document and reduced to a small
+ * safe subset before it ever joins the popup's DOM (see {@link appendSanitised}).
+ */
+function renderServiceMessage(html: string): DocumentFragment {
+  const parsed = new DOMParser().parseFromString(html, 'text/html');
+  const fragment = document.createDocumentFragment();
+  appendSanitised(parsed.body, fragment);
+  return fragment;
 }
 
 const qrFigure = el('qr');

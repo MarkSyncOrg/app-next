@@ -12,24 +12,24 @@ no compatibility constraint with the legacy (AngularJS) client code.
 Alpha. An end-to-end vertical slice works: set up a sync (new or existing), and
 bookmarks are encrypted and synchronised with an xBrowserSync service.
 
-| Area                          | State                                   |
-| ----------------------------- | --------------------------------------- |
-| OpenAPI contract (`openapi/`) | done                                    |
-| Core: crypto                  | done (tested, format-compatible)        |
-| Core: API client              | done (tested)                           |
-| Core: storage                 | done (tested)                           |
-| Core: bookmark model          | done (tested)                           |
-| Core: sync engine             | done (tested) — full-tree + 3-way merge |
-| Service worker (MV3)          | done — needs real-browser validation    |
-| UI (popup)                    | done (setup/status/QR, e2e-covered)     |
+| Area                          | State                                     |
+| ----------------------------- | ----------------------------------------- |
+| OpenAPI contract (`openapi/`) | done                                      |
+| Core: crypto                  | done (tested, format-compatible)          |
+| Core: API client              | done (tested)                             |
+| Core: storage                 | done (tested)                             |
+| Core: bookmark model          | done (tested)                             |
+| Core: sync engine             | done (tested) — full-tree + 3-way merge   |
+| Service worker (MV3)          | done — needs real-browser validation      |
+| UI (popup)                    | done (setup/status/QR/usage, e2e-covered) |
 
 ### How sync works (and current limits)
 
 Synchronisation is **full-tree**: the entire bookmark tree is encrypted and
 uploaded, or downloaded and applied, on each sync. Change detection uses the
 service's `lastUpdated` timestamp, plus a locally cached copy of the last-synced
-tree to detect un-pushed local edits ("dirty" state). Background sync and "Sync
-now" reconcile automatically: push when only local changed, pull when only remote
+tree to detect un-pushed local edits ("dirty" state). Background sync and "Update
+Sync" reconcile automatically: push when only local changed, pull when only remote
 changed, and **three-way merge when both changed** so neither side's edits are lost
 (`src/core/sync/merge.ts`). The merge is structural and content-keyed (folders by
 title, bookmarks by URL, separators by position) rather than per-operation change
@@ -43,8 +43,16 @@ is the one piece that still needs validation against real Chrome/Firefox profile
 ### Settings, backup & logs (options page)
 
 The popup is for setup and status — including a **QR code** of the sync ID (under
-"Show QR code") to transfer it to another device by scanning. A dedicated **options
-page** (opened from the popup) holds everything else. State persists in `chrome.storage` across enable/disable.
+"Show QR code") to transfer it to another device by scanning, a **service status
+badge** (online / offline / not accepting new syncs) with the operator's message, and
+a **data-usage bar** showing how much of the service's `maxSyncSize` the sync occupies.
+Its actions are "Update Sync" and "Disable Sync". A dedicated **options page** (opened
+from the popup) holds everything else. State persists in `chrome.storage` across
+enable/disable.
+
+The operator message is untrusted HTML from whichever service the user configured, so
+the popup parses it into an inert document and reduces it to a small allowlist of tags
+(links only ever keep an absolute `http(s)` href) before it joins the DOM.
 
 Settings:
 
@@ -82,7 +90,7 @@ Web app:
 
 - Both surfaces carry an **Open the MarkSync web app** button linking to
   [app.marksync.org](https://app.marksync.org) — at the foot of the popup, below the
-  settings button so the view's own action (Enable sync / Sync now) keeps the only accent
+  settings button so the view's own action (Enable sync / Update Sync) keeps the only accent
   button above it, and in the options page header, opposite the title. Each is an anchor
   styled as a primary button (`.button`) that opens in a new tab, so the popup closing on
   focus loss never interrupts what the user was doing.

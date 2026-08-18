@@ -68,12 +68,31 @@
       <section id="status" hidden>
         <dl>
           <dt>Service</dt>
-          <dd id="status-service"></dd>
+          <dd id="status-service">
+            <span id="status-service-url"></span>
+            <!-- Glyph + colour are the only visual cue, so main.ts sets an aria-label
+                 naming the service state for assistive technology. -->
+            <span id="status-service-badge" class="badge" role="img" hidden></span>
+          </dd>
           <dt>Sync ID</dt>
           <dd id="status-sync-id" class="monospace"></dd>
           <dt>Last updated</dt>
           <dd id="status-last-updated"></dd>
         </dl>
+
+        <p id="service-message" class="service-message" hidden></p>
+
+        <div id="data-usage" class="data-usage" hidden>
+          <div class="data-usage-header">
+            <span>Data usage</span>
+            <span id="data-usage-percent"></span>
+          </div>
+          <div class="data-usage-bar">
+            <div id="data-usage-fill" class="data-usage-fill"></div>
+          </div>
+          <p id="data-usage-detail" class="data-usage-detail"></p>
+        </div>
+
         <button id="toggle-qr" type="button" class="secondary" aria-expanded="false">
           Show QR code
         </button>
@@ -82,8 +101,8 @@
           <figcaption>Scan to copy this sync ID to another device.</figcaption>
         </figure>
         <div class="actions">
-          <button id="sync-now" type="button">Sync now</button>
-          <button id="disable" type="button" class="secondary">Disable</button>
+          <button id="sync-now" type="button">Update Sync</button>
+          <button id="disable" type="button" class="secondary">Disable Sync</button>
         </div>
       </section>
 
