@@ -65,9 +65,20 @@ because the bookmarks it describes do.
 
 The popup's **This page** editor is where they are set: it shows the active tab's
 bookmark, its description and its comma-separated tags, and offers to bookmark the page
-when it is not bookmarked yet. Reading the tab's URL and title uses the `activeTab`
-permission — granted only for the tab the popup was opened over, and only while it is
-open — so the extension does not ask for access to browsing history. Tags are
+when it is not bookmarked yet. Empty fields are filled in from what the page says about
+itself — `og:description`, then `twitter:description`, then `<meta name="description">`,
+with tags from `<meta name="keywords">` and `og:video:tag` — matching xBrowserSync's
+precedence so both clients suggest the same thing for the same page. A suggestion is only
+ever placed in an empty field and is not stored until saved, so nothing the sync carries
+is overwritten by a page's claims about itself.
+
+Reading the tab's URL and title uses the `activeTab` permission — granted only for the tab
+the popup was opened over, and only while it is open — and `scripting` reads that same
+tab's meta tags. Neither carries an install-time warning, and the reach stays one tab, on
+demand: the extension never asks for access to browsing history. This is deliberately
+narrower than xBrowserSync, which asks for optional access to every http(s) site so it can
+also scrape from the background when a bookmark is starred; the cost is that MarkSync can
+only suggest metadata while the popup is open over the page. Tags are
 de-duplicated and sorted before they are stored: dirty detection and the merge compare
 the tag array by value, so without a canonical order re-entering the same tags in a
 different order would read as an edit.

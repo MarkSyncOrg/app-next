@@ -54,7 +54,13 @@ export default defineConfig({
     // they opened it, and nothing else — no browsing history, and no access at all once
     // the popup closes. That is what lets the popup offer to describe and tag the page
     // you are looking at without the install-time warning a `tabs` permission carries.
-    permissions: ['storage', 'bookmarks', 'alarms', 'activeTab'],
+    //
+    // `scripting` reads that same tab's own `<meta>` description and keywords to fill the
+    // fields in. It carries no warning of its own and grants no site access by itself —
+    // the reach still comes from `activeTab`, so it stays one tab, on demand. This is
+    // deliberately narrower than xBrowserSync, which asks for optional access to every
+    // http(s) site so it can also scrape from the background when a bookmark is starred.
+    permissions: ['storage', 'bookmarks', 'alarms', 'activeTab', 'scripting'],
     // The official service. Self-hosted/custom service URLs are requested at runtime
     // via optional host permissions so users only grant what they actually use.
     host_permissions: ['https://api.xbrowsersync.org/*', ...(extraHost ? [extraHost] : [])],

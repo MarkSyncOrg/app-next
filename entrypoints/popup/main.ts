@@ -3,6 +3,7 @@ import {
   DESCRIPTION_MAX_LENGTH,
   formatTags,
   isSafeBookmarkUrl,
+  normalizeDescription,
   parseTags,
   renderSyncIdQrSvg,
   type SyncDirection,
@@ -14,6 +15,7 @@ import { createUiLogger } from '../../src/logging/ui-logger';
 import { type SetupMode, setupDirectionHint } from '../../src/setup-direction';
 import type { SyncRequest, SyncResponse, SyncResultData } from '../../src/messaging';
 import { HostPermissionGate } from '../../src/webext/host-permission';
+import { readPageMetadata } from '../../src/webext/page-metadata';
 
 const SYNC_OUTCOME_MESSAGES: Record<SyncOutcome, string> = {
   idle: 'Already up to date.',
@@ -387,6 +389,7 @@ pageDescription.maxLength = DESCRIPTION_MAX_LENGTH;
 interface ActivePage {
   url: string;
   title: string;
+  tabId?: number;
 }
 
 let activePage: ActivePage | undefined;
@@ -410,7 +413,7 @@ async function readActivePage(): Promise<ActivePage | undefined> {
   if (!url || !isSafeBookmarkUrl(url)) {
     return undefined;
   }
-  return { url, title: tab.title ?? url };
+  return { url, title: tab.title ?? url, tabId: tab.id };
 }
 
 /** Updates the character counter under the description field. */
@@ -457,12 +460,53 @@ async function renderPageMeta(): Promise<void> {
       pageMetaHint.hidden = true;
     }
     pageMetaForm.hidden = false;
+    await suggestFromPage();
   } catch (error) {
     await log.debug('Could not load the page editor', {
       errorMessage: (error as Error).message,
     });
     pageMetaForm.hidden = true;
   }
+}
+
+/**
+ * Fills empty fields with what the page says about itself.
+ *
+ * Only ever fills a field that is empty, so nothing the sync carries — or the user
+ * typed — is overwritten by a page's own claims about itself. Nothing is stored either:
+ * this is a suggestion sitting in the form until the user saves it, which is why the
+ * hint says so rather than letting them think it is already recorded.
+ */
+async function suggestFromPage(): Promise<void> {
+  const page = activePage;
+  const wantDescription = pageDescription.value === '';
+  const wantTags = pageTags.value === '';
+  if (!page || (!wantDescription && !wantTags)) {
+    return;
+  }
+
+  const metadata = await readPageMetadata(page.tabId);
+  const description = wantDescription ? normalizeDescription(metadata.description) : '';
+  const tags = wantTags ? parseTags(metadata.tags ?? '') : [];
+  if (description === '' && tags.length === 0) {
+    return;
+  }
+
+  if (description !== '') {
+    pageDescription.value = description;
+    renderDescriptionCount();
+  }
+  if (tags.length > 0) {
+    pageTags.value = formatTags(tags);
+  }
+  pageMetaHint.textContent = pageMetaHint.hidden
+    ? 'Suggested from the page — save to keep.'
+    : `${pageMetaHint.textContent} Suggested from the page — save to keep.`;
+  pageMetaHint.hidden = false;
+  await log.debug('Suggested metadata from the page', {
+    descriptionChars: description.length,
+    tags: tags.length,
+  });
 }
 
 pageMetaForm.addEventListener('submit', (event) => {
