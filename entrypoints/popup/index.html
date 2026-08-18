@@ -59,7 +59,9 @@
           <dt>Service</dt>
           <dd id="status-service">
             <span id="status-service-url"></span>
-            <span id="status-service-badge" class="badge" hidden></span>
+            <!-- Glyph + colour are the only visual cue, so main.ts sets an aria-label
+                 naming the service state for assistive technology. -->
+            <span id="status-service-badge" class="badge" role="img" hidden></span>
           </dd>
           <dt>Sync ID</dt>
           <dd id="status-sync-id" class="monospace"></dd>

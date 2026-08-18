@@ -28,6 +28,11 @@ const LOG_ROTATE_ALARM = 'xbs-log-rotate';
 /** How often expired log days are swept (writes rotate too; this covers idle periods). */
 const LOG_ROTATE_INTERVAL_MINUTES = 60;
 const PUSH_DEBOUNCE_MS = 2000;
+/**
+ * Storage key for the last sync-size measurement. Kept outside SyncStore's own keys
+ * because it is a cache, not sync state — it is cleared explicitly on disable.
+ */
+const SYNC_USAGE_CACHE_KEY = 'syncUsageCache';
 /** Only report lock waits above this, so uncontended operations stay quiet. */
 const LOCK_WAIT_LOG_THRESHOLD_MS = 50;
 
@@ -37,6 +42,12 @@ const SYNC_OUTCOME_MESSAGES: Record<SyncOutcome, string> = {
   pulled: 'Pulled remote changes',
   merged: 'Merged local and remote changes',
 };
+
+/** A sync-size measurement, tagged with the payload revision it was taken from. */
+interface SyncUsageCache {
+  lastUpdated: string;
+  usedBytes: number;
+}
 
 /** What woke a background sync, so the log says why it ran. */
 type SyncTrigger = 'alarm' | 'startup';
@@ -126,7 +137,8 @@ function summariseResult(request: SyncRequest, data: unknown): LogContext {
 export function initSyncController(): void {
   const { logger, store: logStore } = createBackgroundLog();
   const log = logger.child('sync');
-  const store = new SyncStore(browserStorageArea());
+  const storage = browserStorageArea();
+  const store = new SyncStore(storage);
   const provider = new WebextBookmarkProvider({
     isToolbarEnabled: async () => (await store.getSettings()).syncBookmarksToolbar,
     logger: logger.child('bookmarks'),
@@ -183,8 +195,20 @@ export function initSyncController(): void {
         if (!info || !(await store.isSyncEnabled())) {
           throw new SyncNotEnabledError();
         }
-        const { bookmarks } = await new XbrowsersyncApi(info.serviceUrl).getSync(info.syncId);
-        return { usedBytes: new TextEncoder().encode(bookmarks).length };
+        const api = new XbrowsersyncApi(info.serviceUrl);
+        // The only way to size a sync is to download it, and the payload runs to
+        // megabytes — far too much to re-fetch every time the popup opens. `lastUpdated`
+        // changes whenever the stored payload does, so the cheap poll endpoint it exists
+        // for tells us whether the measurement we already have is still current.
+        const lastUpdated = await api.getLastUpdated(info.syncId);
+        const cached = await storage.get<SyncUsageCache>(SYNC_USAGE_CACHE_KEY);
+        if (cached?.lastUpdated === lastUpdated) {
+          return { usedBytes: cached.usedBytes };
+        }
+        const { bookmarks } = await api.getSync(info.syncId);
+        const usedBytes = new TextEncoder().encode(bookmarks).length;
+        await storage.set<SyncUsageCache>(SYNC_USAGE_CACHE_KEY, { lastUpdated, usedBytes });
+        return { usedBytes };
       }
       case 'enableNewSync': {
         const syncId = await withLock('enableNewSync', () =>
@@ -226,6 +250,8 @@ export function initSyncController(): void {
         return null;
       case 'disable':
         await withLock('disable', () => engine.disable());
+        // engine.disable() clears SyncStore's own keys; the usage cache is ours.
+        await storage.remove(SYNC_USAGE_CACHE_KEY);
         await log.info('Sync disabled');
         return null;
       case 'getSettings':
