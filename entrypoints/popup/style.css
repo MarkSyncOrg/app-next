@@ -361,3 +361,36 @@ dd {
   color: var(--muted);
   font-size: 12px;
 }
+
+/* The page editor sits above the sync status: it is what the popup is opened for most
+   often, while the status below it is mostly there to be glanced at. */
+.page-meta {
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* The page's own title, shown so it is obvious which bookmark is being edited. Clamped
+   rather than wrapped: a long title would otherwise push the fields out of view in a
+   popup this narrow. */
+.page-meta-title {
+  margin: 0;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+textarea {
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font: inherit;
+  background: var(--surface);
+  color: inherit;
+  resize: vertical;
+}
+
+textarea:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}

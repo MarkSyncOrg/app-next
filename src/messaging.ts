@@ -1,6 +1,7 @@
 import type {
   Backup,
   Bookmark,
+  BookmarkMetadata,
   ServiceInfo,
   Settings,
   SyncDirection,
@@ -36,11 +37,24 @@ export type SyncRequest =
   | { type: 'clearLog' }
   | { type: 'createBackup' }
   | { type: 'restoreBackup'; bookmarks: Bookmark[] }
+  | { type: 'getBookmarkMetadata'; url: string }
+  | { type: 'setBookmarkMetadata'; url: string; description: string; tags: string[] }
+  | { type: 'addBookmark'; url: string; title: string; description: string; tags: string[] }
   // Relays a log entry from the popup/options page into the worker's rotating log,
   // so UI activity and background activity share one chronological trace.
   | { type: 'log'; entry: LogEntry };
 
 export type SyncRequestType = SyncRequest['type'];
+
+/** The description and tags held for one URL, and whether it is bookmarked at all. */
+export interface BookmarkMetadataResult extends BookmarkMetadata {
+  /** Whether the URL is bookmarked in a synced container. */
+  bookmarked: boolean;
+  /** Title of the bookmark, when there is one. */
+  title?: string;
+  /** How many bookmarks share this URL; metadata is written to all of them. */
+  matches: number;
+}
 
 /** Maps each request type to its success payload. */
 export interface SyncResultData {
@@ -59,6 +73,9 @@ export interface SyncResultData {
   clearLog: null;
   createBackup: Backup;
   restoreBackup: null;
+  getBookmarkMetadata: BookmarkMetadataResult;
+  setBookmarkMetadata: null;
+  addBookmark: null;
   log: null;
 }
 
@@ -82,6 +99,9 @@ const REQUEST_TYPES: readonly SyncRequestType[] = [
   'clearLog',
   'createBackup',
   'restoreBackup',
+  'getBookmarkMetadata',
+  'setBookmarkMetadata',
+  'addBookmark',
   'log',
 ];
 

@@ -12,16 +12,16 @@ no compatibility constraint with the legacy (AngularJS) client code.
 Alpha. An end-to-end vertical slice works: set up a sync (new or existing), and
 bookmarks are encrypted and synchronised with an xBrowserSync service.
 
-| Area                          | State                                     |
-| ----------------------------- | ----------------------------------------- |
-| OpenAPI contract (`openapi/`) | done                                      |
-| Core: crypto                  | done (tested, format-compatible)          |
-| Core: API client              | done (tested)                             |
-| Core: storage                 | done (tested)                             |
-| Core: bookmark model          | done (tested)                             |
-| Core: sync engine             | done (tested) — full-tree + 3-way merge   |
-| Service worker (MV3)          | done — needs real-browser validation      |
-| UI (popup)                    | done (setup/status/QR/usage, e2e-covered) |
+| Area                          | State                                    |
+| ----------------------------- | ---------------------------------------- |
+| OpenAPI contract (`openapi/`) | done                                     |
+| Core: crypto                  | done (tested, format-compatible)         |
+| Core: API client              | done (tested)                            |
+| Core: storage                 | done (tested)                            |
+| Core: bookmark model          | done (tested)                            |
+| Core: sync engine             | done (tested) — full-tree + 3-way merge  |
+| Service worker (MV3)          | done — needs real-browser validation     |
+| UI (popup)                    | done (page editor/setup/status/QR/usage) |
 
 ### How sync works (and current limits)
 
@@ -40,6 +40,48 @@ future work. A device can also be restricted to half of that — see
 
 The browser↔xBrowserSync bookmark mapping (`src/background/webext-bookmark-provider.ts`)
 is the one piece that still needs validation against real Chrome/Firefox profiles.
+
+#### Descriptions and tags
+
+The xBrowserSync bookmark model carries a `description` and `tags`, and no browser has
+anywhere to put either — a native bookmark node holds a title and a URL. Since the local
+tree is rebuilt from the native one on every read, that metadata is not merely invisible,
+it is lost on the round trip: the next dirty check reads the loss as a local edit and
+pushes a stripped tree, erasing every description and tag in the sync for every device.
+
+So they are kept in a **sidecar** in `chrome.storage` alongside the browser's bookmarks:
+written whenever a tree is applied to the browser, laid back over the native tree
+whenever it is read. Everything above the provider — dirty detection, the merge, the
+upload — therefore sees whole bookmarks, and the wire format is unchanged, so
+descriptions and tags written by xBrowserSync clients survive a round trip through
+MarkSync and vice versa.
+
+Entries are keyed by the same content-based identity the merge uses, shared in the core's
+`bookmarks/identity.ts` so the two cannot drift. A write replaces the entries of every
+container it touches, which is what lets a description deleted on another device actually
+disappear; when a bookmark's path no longer matches (a renamed folder, a bookmark dragged
+elsewhere) an unambiguous URL is used instead. The sidecar survives disabling sync,
+because the bookmarks it describes do.
+
+The popup's **This page** editor is where they are set: it shows the active tab's
+bookmark, its description and its comma-separated tags, and offers to bookmark the page
+when it is not bookmarked yet. Empty fields are filled in from what the page says about
+itself — `og:description`, then `twitter:description`, then `<meta name="description">`,
+with tags from `<meta name="keywords">` and `og:video:tag` — matching xBrowserSync's
+precedence so both clients suggest the same thing for the same page. A suggestion is only
+ever placed in an empty field and is not stored until saved, so nothing the sync carries
+is overwritten by a page's claims about itself.
+
+Reading the tab's URL and title uses the `activeTab` permission — granted only for the tab
+the popup was opened over, and only while it is open — and `scripting` reads that same
+tab's meta tags. Neither carries an install-time warning, and the reach stays one tab, on
+demand: the extension never asks for access to browsing history. This is deliberately
+narrower than xBrowserSync, which asks for optional access to every http(s) site so it can
+also scrape from the background when a bookmark is starred; the cost is that MarkSync can
+only suggest metadata while the popup is open over the page. Tags are
+de-duplicated and sorted before they are stored: dirty detection and the merge compare
+the tag array by value, so without a canonical order re-entering the same tags in a
+different order would read as an edit.
 
 ### One-way sync
 
@@ -90,10 +132,11 @@ made before you switch it.
 
 ### Settings, backup & logs (options page)
 
-The popup is for setup and status — including a **QR code** of the sync ID (under
-"Show QR code") to transfer it to another device by scanning, a **service status
-badge** (online / offline / not accepting new syncs) with the operator's message, and
-a **data-usage bar** showing how much of the service's `maxSyncSize` the sync occupies.
+The popup is for the **page editor** (description and tags for the active tab), setup and
+status — including a **QR code** of the sync ID (under "Show QR code") to transfer it to
+another device by scanning, a **service status badge** (online / offline / not accepting
+new syncs) with the operator's message, and a **data-usage bar** showing how much of the
+service's `maxSyncSize` the sync occupies.
 Its actions are "Update Sync" and "Disable Sync". A dedicated **options page** (opened
 from the popup) holds everything else. State persists in `chrome.storage` across
 enable/disable.

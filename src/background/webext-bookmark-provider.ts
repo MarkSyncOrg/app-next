@@ -1,11 +1,15 @@
 import { browser } from 'wxt/browser';
 import {
+  applyBookmarkMetadata,
   type Bookmark,
   BookmarkContainer,
+  type BookmarkMetadataStore,
   type BookmarkProvider,
+  captureBookmarkMetadata,
   nativeToBookmarks,
   SEPARATOR_URL,
 } from '@marksyncorg/core';
+import { urlOrigin } from '../logging/log-entry';
 import { Logger } from '../logging/logger';
 
 interface ContainerRoot {
@@ -41,22 +45,6 @@ function countBookmarks(bookmarks: Bookmark[]): number {
 }
 
 /**
- * Origin of a URL, or `'invalid-url'`. Bookmark titles and full URLs are never logged
- * (the debug log is downloadable and gets attached to bug reports); the origin is
- * enough to tell which entry a mapping error came from.
- */
-function originOf(url: string | undefined): string {
-  if (!url) {
-    return 'none';
-  }
-  try {
-    return new URL(url).origin;
-  } catch {
-    return 'invalid-url';
-  }
-}
-
-/**
  * BookmarkProvider backed by the WebExtension bookmarks API. This is the single
  * browser-specific seam of the sync engine. `setBookmarks` is destructive: it replaces
  * the contents of each container root with the synced tree (full-tree sync).
@@ -64,6 +52,13 @@ function originOf(url: string | undefined): string {
 export interface WebextBookmarkProviderOptions {
   /** Resolves whether the toolbar/bar container should be included in the sync. */
   isToolbarEnabled?: () => Promise<boolean>;
+  /**
+   * Sidecar for the description and tags a native bookmark node cannot hold. Without
+   * one the provider still works, but those attributes do not survive a read: the
+   * browser drops them, and the sync engine then reads the loss as a local edit and
+   * pushes a tree with every description and tag stripped out.
+   */
+  metadata?: BookmarkMetadataStore;
   /** Where to trace bookmark reads/writes; defaults to a logger with no sinks. */
   logger?: Logger;
 }
@@ -108,12 +103,42 @@ export class WebextBookmarkProvider implements BookmarkProvider {
       containers: containers.length,
       items: countBookmarks(containers) - containers.length,
     });
-    return containers;
+    return this.withMetadata(containers);
+  }
+
+  /**
+   * Lays the stored description and tags back over a tree the browser just handed us.
+   *
+   * The WebExtension bookmarks API has no field for either, so every read comes back
+   * without them. Restoring them here — rather than anywhere above the provider — is
+   * what makes the whole sync engine see complete bookmarks: dirty detection compares
+   * them, the merge merges them, and the upload carries them.
+   */
+  private async withMetadata(bookmarks: Bookmark[]): Promise<Bookmark[]> {
+    if (!this.options.metadata) {
+      return bookmarks;
+    }
+    const stored = await this.options.metadata.getAll();
+    const applied = applyBookmarkMetadata(bookmarks, stored);
+    await this.log.debug('Applied stored bookmark metadata', {
+      entries: Object.keys(stored).length,
+    });
+    return applied;
   }
 
   async setBookmarks(bookmarks: Bookmark[]): Promise<void> {
     const rootByContainer = new Map(
       (await this.includedRoots()).map(({ container, rootId }) => [container as string, rootId]),
+    );
+    // Recorded before the native write, which is what discards the metadata: if the
+    // write fails part-way the sidecar still describes the tree we were asked to store,
+    // and the next read lays it back over whatever survived.
+    //
+    // Only the containers the write actually reaches. A container with no local root —
+    // the Menu on Chromium, or a toolbar the user excluded — is skipped below, and
+    // capturing it would replace the entries of a container this device never wrote.
+    await this.captureMetadata(
+      bookmarks.filter((container) => container.title && rootByContainer.has(container.title)),
     );
     let removedTotal = 0;
     let createdTotal = 0;
@@ -141,6 +166,37 @@ export class WebextBookmarkProvider implements BookmarkProvider {
       removedTrees: removedTotal,
       created: createdTotal,
     });
+  }
+
+  /**
+   * Creates a single bookmark at the end of a container, leaving the rest of the tree
+   * alone. Unlike {@link setBookmarks} this is additive — it exists so the popup can
+   * bookmark the page the user is on without rewriting every bookmark they have.
+   *
+   * Resolves false when the container is not synced on this browser (no Menu container
+   * on Chromium, or a toolbar the user excluded), so the caller can say why nothing
+   * happened rather than reporting a success that did not occur.
+   */
+  async createBookmark(container: BookmarkContainer, title: string, url: string): Promise<boolean> {
+    const root = (await this.includedRoots()).find((entry) => entry.container === container);
+    if (!root) {
+      await this.log.debug('Cannot create a bookmark: container is not synced', { container });
+      return false;
+    }
+    await browser.bookmarks.create({ parentId: root.rootId, title, url });
+    await this.log.info('Created a bookmark', { container, origin: urlOrigin(url) });
+    return true;
+  }
+
+  /** Records the metadata of a tree about to be written, so the next read can restore it. */
+  private async captureMetadata(bookmarks: Bookmark[]): Promise<void> {
+    const store = this.options.metadata;
+    if (!store) {
+      return;
+    }
+    const captured = captureBookmarkMetadata(await store.getAll(), bookmarks);
+    await store.setAll(captured);
+    await this.log.debug('Captured bookmark metadata', { entries: Object.keys(captured).length });
   }
 
   private async getRoot(rootId: string) {
@@ -204,7 +260,7 @@ export class WebextBookmarkProvider implements BookmarkProvider {
         await this.log.failure('Failed to create a bookmark', error, {
           parentId,
           kind: bookmark.url ? 'bookmark' : 'folder',
-          origin: originOf(bookmark.url),
+          origin: urlOrigin(bookmark.url),
         });
         throw error;
       }

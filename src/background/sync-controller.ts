@@ -1,7 +1,15 @@
 import { browser } from 'wxt/browser';
 import {
+  type Bookmark,
+  BookmarkContainer,
+  BookmarkMetadataStore,
+  bookmarkMetadataKeysForUrl,
   buildBackup,
+  eachBookmark,
   Mutex,
+  normalizeDescription,
+  normalizeTags,
+  setBookmarkMetadata,
   type Settings,
   SyncConflictError,
   SyncEngine,
@@ -12,6 +20,7 @@ import {
   XbrowsersyncApi,
 } from '@marksyncorg/core';
 import {
+  type BookmarkMetadataResult,
   isSyncRequest,
   type SyncRequest,
   type SyncResponse,
@@ -19,7 +28,7 @@ import {
 } from '../messaging';
 import { commitLabel, currentBuild } from '../build-info';
 import { createBackgroundLog } from '../logging/background-logger';
-import { type LogContext, type LogEntry, sanitiseLogEntry } from '../logging/log-entry';
+import { type LogContext, type LogEntry, sanitiseLogEntry, urlOrigin } from '../logging/log-entry';
 import { browserStorageArea } from '../webext/browser-storage-area';
 import { WebextBookmarkProvider } from './webext-bookmark-provider';
 
@@ -96,6 +105,17 @@ function describeRequest(request: SyncRequest): LogContext {
       return { settings: request.settings };
     case 'restoreBackup':
       return { containers: request.bookmarks.length };
+    case 'getBookmarkMetadata':
+      return { origin: urlOrigin(request.url) };
+    case 'setBookmarkMetadata':
+    case 'addBookmark':
+      // The description and the tags are the user's own words about their own
+      // bookmarks — as private as the bookmark itself, so only their size is recorded.
+      return {
+        origin: urlOrigin(request.url),
+        descriptionChars: request.description.length,
+        tags: request.tags.length,
+      };
     default:
       return {};
   }
@@ -131,6 +151,15 @@ function summariseResult(request: SyncRequest, data: unknown): LogContext {
       return { entries: (data as LogEntry[]).length };
     case 'getSyncUsage':
       return { usedBytes: (data as { usedBytes: number }).usedBytes };
+    case 'getBookmarkMetadata': {
+      const result = data as BookmarkMetadataResult;
+      return {
+        bookmarked: result.bookmarked,
+        matches: result.matches,
+        descriptionChars: result.description?.length ?? 0,
+        tags: result.tags?.length ?? 0,
+      };
+    }
     default:
       return {};
   }
@@ -150,8 +179,10 @@ export function initSyncController(): void {
   const log = logger.child('sync');
   const storage = browserStorageArea();
   const store = new SyncStore(storage);
+  const metadata = new BookmarkMetadataStore(storage);
   const provider = new WebextBookmarkProvider({
     isToolbarEnabled: async () => (await store.getSettings()).syncBookmarksToolbar,
+    metadata,
     logger: logger.child('bookmarks'),
   });
   const engine = new SyncEngine({
@@ -193,6 +224,52 @@ export function initSyncController(): void {
       }
       return action();
     });
+  }
+
+  /**
+   * The description and tags currently held for a URL, read through the provider so the
+   * answer is what the sync would actually carry (the sidecar already laid over the
+   * browser's tree), not the raw native node.
+   */
+  async function readBookmarkMetadata(url: string): Promise<BookmarkMetadataResult> {
+    const matches: Bookmark[] = [];
+    eachBookmark(await provider.getBookmarks(), (bookmark) => {
+      if (bookmark.url === url) {
+        matches.push(bookmark);
+      }
+    });
+    const first = matches[0];
+    return {
+      bookmarked: matches.length > 0,
+      matches: matches.length,
+      title: first?.title,
+      description: first?.description,
+      tags: first?.tags,
+    };
+  }
+
+  /**
+   * Writes description and tags for every bookmark of a URL, returning how many were
+   * updated. Writing all of them, rather than the first, is what keeps the result
+   * independent of which copy the editor happened to read.
+   *
+   * Only the sidecar is touched: nothing in the native tree changes, so this deliberately
+   * avoids the destructive full-tree write that applying a whole tree would mean.
+   */
+  async function writeBookmarkMetadata(
+    url: string,
+    description: string,
+    tags: string[],
+  ): Promise<number> {
+    const keys = bookmarkMetadataKeysForUrl(await provider.getBookmarks(), url);
+    if (keys.length > 0) {
+      const updated = setBookmarkMetadata(await metadata.getAll(), keys, url, {
+        description: normalizeDescription(description),
+        tags: normalizeTags(tags),
+      });
+      await metadata.setAll(updated);
+    }
+    return keys.length;
   }
 
   async function dispatch(request: SyncRequest): Promise<SyncResultData[SyncRequest['type']]> {
@@ -309,6 +386,37 @@ export function initSyncController(): void {
         await withLock('restoreBackup', () => applyRemote(() => engine.restore(request.bookmarks)));
         await log.info('Backup restored', { containers: request.bookmarks.length });
         return null;
+      case 'getBookmarkMetadata':
+        return withLock('getBookmarkMetadata', () => readBookmarkMetadata(request.url));
+      case 'setBookmarkMetadata': {
+        const updated = await withLock('setBookmarkMetadata', () =>
+          writeBookmarkMetadata(request.url, request.description, request.tags),
+        );
+        if (updated === 0) {
+          throw new Error('That page is no longer bookmarked');
+        }
+        // No native node changed, so no bookmark event fires: this is the only thing
+        // that tells the sync there is something new to push.
+        schedulePush('changed');
+        return null;
+      }
+      case 'addBookmark': {
+        await withLock('addBookmark', async () => {
+          // Already bookmarked (the popup raced, or another window added it): keep the
+          // bookmark the user has and just write the metadata onto it, rather than
+          // leaving them with two copies of the same page.
+          const { bookmarked } = await readBookmarkMetadata(request.url);
+          if (
+            !bookmarked &&
+            !(await provider.createBookmark(BookmarkContainer.Other, request.title, request.url))
+          ) {
+            throw new Error('This browser has no bookmark folder to add it to');
+          }
+          await writeBookmarkMetadata(request.url, request.description, request.tags);
+        });
+        schedulePush('created');
+        return null;
+      }
       case 'log':
         // Handled before dispatch; listed for exhaustiveness.
         return null;
