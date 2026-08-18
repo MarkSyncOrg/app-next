@@ -41,6 +41,8 @@ const SYNC_OUTCOME_MESSAGES: Record<SyncOutcome, string> = {
   pushed: 'Pushed local changes',
   pulled: 'Pulled remote changes',
   merged: 'Merged local and remote changes',
+  skipped: 'Ignored remote changes (this device only sends)',
+  reverted: 'Undid local changes (this device only receives)',
 };
 
 /** A sync-size measurement, tagged with the payload revision it was taken from. */
@@ -109,7 +111,11 @@ function summariseResult(request: SyncRequest, data: unknown): LogContext {
   switch (request.type) {
     case 'getStatus': {
       const status = data as SyncStatus;
-      return { enabled: status.enabled, lastUpdated: status.lastUpdated };
+      return {
+        enabled: status.enabled,
+        lastUpdated: status.lastUpdated,
+        direction: status.direction,
+      };
     }
     case 'getSettings':
     case 'setSettings':
@@ -436,7 +442,14 @@ export function initSyncController(): void {
       pushTimer = undefined;
       void (async () => {
         try {
-          if (!(await store.getSettings()).syncOnChange) {
+          const settings = await store.getSettings();
+          if (settings.syncDirection === 'pull-only') {
+            // The engine would refuse the push anyway; checking here keeps a receive-only
+            // device from logging a failure for every bookmark the user touches.
+            await log.debug('Debounced push skipped: this device only receives', { event });
+            return;
+          }
+          if (!settings.syncOnChange) {
             await log.debug('Debounced push skipped: sync-on-change is off', { event });
             return;
           }

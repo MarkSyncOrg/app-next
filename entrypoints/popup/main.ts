@@ -1,5 +1,10 @@
 import { browser } from 'wxt/browser';
-import { renderSyncIdQrSvg, type SyncOutcome, type Theme } from '@marksyncorg/core';
+import {
+  renderSyncIdQrSvg,
+  type SyncDirection,
+  type SyncOutcome,
+  type Theme,
+} from '@marksyncorg/core';
 import { buildDescription, currentBuild, versionLabel } from '../../src/build-info';
 import { createUiLogger } from '../../src/logging/ui-logger';
 import type { SyncRequest, SyncResponse, SyncResultData } from '../../src/messaging';
@@ -10,6 +15,18 @@ const SYNC_OUTCOME_MESSAGES: Record<SyncOutcome, string> = {
   pushed: 'Pushed local changes.',
   pulled: 'Pulled latest changes.',
   merged: 'Merged local and remote changes.',
+  skipped: 'Remote changes ignored: this device only sends.',
+  reverted: 'Local changes undone: this device only receives.',
+};
+
+/**
+ * How a one-way device describes itself in the status view. Two-way is the default and
+ * gets no row: only a device that deliberately refuses half the sync needs to say so,
+ * and it is the explanation for an "Update Sync" that sent or applied nothing.
+ */
+const DIRECTION_LABELS: Partial<Record<SyncDirection, string>> = {
+  'push-only': 'Send only — remote changes are not applied here',
+  'pull-only': 'Receive only — local changes are not uploaded',
 };
 
 const log = createUiLogger('popup');
@@ -118,6 +135,7 @@ async function render(): Promise<void> {
   await log.debug('Rendering status', {
     enabled: status.enabled,
     lastUpdated: status.lastUpdated,
+    direction: status.direction,
   });
   setupForm.hidden = status.enabled;
   statusView.hidden = !status.enabled;
@@ -126,6 +144,10 @@ async function render(): Promise<void> {
     el('status-service-url').textContent = status.serviceUrl ?? '';
     el('status-sync-id').textContent = status.syncId ?? '';
     el('status-last-updated').textContent = formatTimestamp(status.lastUpdated);
+    const directionLabel = DIRECTION_LABELS[status.direction];
+    el('status-direction-row').hidden = directionLabel === undefined;
+    el('status-direction').hidden = directionLabel === undefined;
+    el('status-direction').textContent = directionLabel ?? '';
     currentSyncId = status.syncId ?? '';
     hideQr();
 

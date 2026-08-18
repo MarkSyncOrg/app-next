@@ -78,6 +78,10 @@
           <dd id="status-sync-id" class="monospace"></dd>
           <dt>Last updated</dt>
           <dd id="status-last-updated"></dd>
+          <!-- Both halves are hidden together: a <dt> with no <dd> reads as an empty
+               term to a screen reader. Shown only when the sync is one-way. -->
+          <dt id="status-direction-row" hidden>Direction</dt>
+          <dd id="status-direction" hidden></dd>
         </dl>
 
         <p id="service-message" class="service-message" hidden></p>

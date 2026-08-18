@@ -4,6 +4,7 @@ import {
   extractBookmarksWithReport,
   parseBackup,
   type Settings,
+  type SyncDirection,
   type Theme,
 } from '@marksyncorg/core';
 import { buildDescription, currentBuild, versionLabel } from '../../src/build-info';
@@ -12,6 +13,20 @@ import { createUiLogger } from '../../src/logging/ui-logger';
 import type { SyncRequest, SyncResponse, SyncResultData } from '../../src/messaging';
 
 const log = createUiLogger('options');
+
+/**
+ * What each direction does, in the user's terms. Shown under the selector because the
+ * option labels alone do not say what happens to changes made on the losing side.
+ */
+const DIRECTION_HINTS: Record<SyncDirection, string> = {
+  'two-way': 'This device sends and receives. Changes made here and elsewhere are merged together.',
+  'push-only':
+    'This device only sends. Its bookmarks are uploaded, and changes made on other devices are ' +
+    'never applied here — they are replaced the next time this device uploads.',
+  'pull-only':
+    'This device only receives. It mirrors the sync, and changes made here are never uploaded — ' +
+    'they are undone the next time it syncs.',
+};
 
 /** Sends a typed request to the background worker and unwraps the response. */
 async function send<K extends SyncRequest['type']>(
@@ -44,6 +59,8 @@ const themeSelect = el<HTMLSelectElement>('set-theme');
 const intervalSelect = el<HTMLSelectElement>('set-interval');
 const toolbarCheck = el<HTMLInputElement>('set-toolbar');
 const onChangeCheck = el<HTMLInputElement>('set-on-change');
+const directionSelect = el<HTMLSelectElement>('set-direction');
+const directionHint = el('direction-hint');
 const exportButton = el<HTMLButtonElement>('export-backup');
 const importFile = el<HTMLInputElement>('import-file');
 const restoreButton = el<HTMLButtonElement>('restore-backup');
@@ -89,6 +106,11 @@ function renderSettings(settings: Settings): void {
   intervalSelect.value = String(settings.syncIntervalMinutes);
   toolbarCheck.checked = settings.syncBookmarksToolbar;
   onChangeCheck.checked = settings.syncOnChange;
+  directionSelect.value = settings.syncDirection;
+  directionHint.textContent = DIRECTION_HINTS[settings.syncDirection];
+  // "Sync changes automatically" pushes, so it does nothing on a receive-only device.
+  onChangeCheck.disabled = settings.syncDirection === 'pull-only';
+  applyDirectionToRecovery(settings.syncDirection);
   applyTheme(settings.theme);
 }
 
@@ -113,6 +135,9 @@ toolbarCheck.addEventListener('change', () => {
 });
 onChangeCheck.addEventListener('change', () => {
   void saveSettings({ syncOnChange: onChangeCheck.checked });
+});
+directionSelect.addEventListener('change', () => {
+  void saveSettings({ syncDirection: directionSelect.value as SyncDirection });
 });
 
 // --- Backup & restore ---
@@ -212,9 +237,23 @@ async function forceSync(
   } catch (error) {
     showMessage((error as Error).message || 'Force sync failed', true);
   } finally {
-    forcePullButton.disabled = false;
-    forcePushButton.disabled = false;
+    applyDirectionToRecovery(directionSelect.value as SyncDirection);
   }
+}
+
+/**
+ * Greys out the recovery action the sync direction forbids. The worker rejects it either
+ * way; disabling the button says so before the user commits to a destructive action.
+ */
+function applyDirectionToRecovery(direction: SyncDirection): void {
+  forcePullButton.disabled = direction === 'push-only';
+  forcePullButton.title = forcePullButton.disabled
+    ? 'Unavailable: this device is set to send changes only.'
+    : '';
+  forcePushButton.disabled = direction === 'pull-only';
+  forcePushButton.title = forcePushButton.disabled
+    ? 'Unavailable: this device is set to receive changes only.'
+    : '';
 }
 
 forcePullButton.addEventListener('click', () => {
