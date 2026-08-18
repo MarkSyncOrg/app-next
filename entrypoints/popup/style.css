@@ -1,45 +1,19 @@
-/* Palette taken from the legacy xBrowserSync client
-   (src/styles/modules/_colors-default.scss and _colors-dark.scss). */
+/* Brand palette from the marksync.org site assets — fixed dark header/cream card look,
+   no light/dark theme switching (see the "Popup" design handoff). */
 :root {
-  --bg: #edfeff;
-  --surface: #ffffff;
-  --text: #083039;
-  --muted: #75959c;
-  --accent: #01ab8a;
-  --accent-2: #35c6e8;
-  --on-accent: #edfeff;
-  --success: #30d278;
-  --danger: #ea3869;
-  --border: color-mix(in srgb, var(--text) 15%, transparent);
-}
-
-/* Dark palette: applied automatically with the system preference, or explicitly
-   via [data-theme]. The light/dark attributes let the popup override the system. */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #1e2228;
-    --surface: #2d333b;
-    --text: #cdd9e5;
-    --muted: #8a96a3;
-    --on-accent: #edfeff;
-    --border: #474f5b;
-  }
-}
-
-:root[data-theme='dark'] {
-  --bg: #1e2228;
-  --surface: #2d333b;
-  --text: #cdd9e5;
-  --muted: #8a96a3;
-  --border: #474f5b;
-}
-
-:root[data-theme='light'] {
-  --bg: #edfeff;
-  --surface: #ffffff;
-  --text: #083039;
-  --muted: #75959c;
-  --border: color-mix(in srgb, var(--text) 15%, transparent);
+  --ink: #17170f;
+  --card: #fffef8;
+  --card-alt: #f7f6ec;
+  --muted: #5c5b4e;
+  --muted-2: #8b8a7a;
+  --border: #dedcc9;
+  --border-strong: #d3d1bd;
+  --border-soft: #ecebdd;
+  --accent: #c8f542;
+  --accent-hover: #d6fa6a;
+  --danger: #b04a3e;
+  --online: #9fce1f;
+  --limited: #d97706;
 }
 
 * {
@@ -51,56 +25,76 @@
   display: none !important;
 }
 
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 body {
   margin: 0;
   width: 340px;
-  font:
-    14px/1.45 system-ui,
-    sans-serif;
-  background: var(--bg);
-  color: var(--text);
-}
+  font-family: 'Archivo', Helvetica, Arial, sans-serif;
+  background: var(--card);
+  color: var(--ink);
+  /* The popup sizes itself to its content, so its height follows the form: showing the
+     sync-ID field or a direction hint makes the window taller, hiding them makes it
+     shorter. The only fixed part is the ceiling.
 
-#app {
-  padding: 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  /* The popup sizes itself to this element, so its height follows the content and
-     changes with the form: showing the sync-ID field or a direction hint makes the
-     window taller, hiding them makes it shorter. The only fixed part is the ceiling.
-
-     A browser caps a popup around 600px and then clips it, with no scrollbar of its
-     own — which is how the submit button became unreachable on a tall setup form. The
-     cap therefore lives here, on the element that can scroll: put on <body> it does
-     nothing, because a body's overflow is propagated to the viewport and the element
-     itself is left scrolling nothing.
-
-     Deliberately a plain length and not `min(600px, 100vh)`: viewport units inside an
-     extension popup are resolved against a viewport that is still being decided from
-     this very element's height, and a browser that answers small collapses the whole
-     window. A length cannot be misread. */
+     A browser caps a popup around 600px and then clips it, with no scrollbar of its own
+     — which is how the submit button became unreachable on a tall setup form. The cap
+     therefore lives here, on the scrolling element, and body itself is that element:
+     everything else (header, main) flows inside it. */
   max-height: 600px;
   overflow-y: auto;
+}
+
+a {
+  color: var(--muted);
+}
+
+a:hover {
+  color: var(--ink);
+}
+
+textarea::placeholder,
+input::placeholder {
+  color: #a8a798;
 }
 
 .app-header {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  padding: 12px 14px;
+  background: var(--ink);
 }
 
-.app-header img {
+.app-header .app-mark {
   display: block;
+  flex-shrink: 0;
 }
 
-h1 {
+.app-header h1 {
   margin: 0;
-  font-size: 16px;
-  background: linear-gradient(90deg, var(--accent), var(--accent-2));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  flex: 1;
+  font-size: 17px;
+  font-weight: 900;
+  letter-spacing: -0.5px;
+  color: #ffffff;
+}
+
+#app {
+  padding: 14px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 h2 {
@@ -108,11 +102,10 @@ h2 {
   font-size: 13px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--muted);
+  color: var(--muted-2);
 }
 
-form,
-section {
+form {
   display: flex;
   flex-direction: column;
   /* Tight enough that joining an existing sync — the longest form — still fits inside the
@@ -125,26 +118,35 @@ label {
   flex-direction: column;
   gap: 4px;
   font-weight: 600;
+  font-size: 12.5px;
+  color: var(--muted);
 }
 
 input[type='url'],
 input[type='text'],
 input[type='password'],
 select {
-  padding: 8px;
+  padding: 8px 10px;
   border: 1px solid var(--border);
-  border-radius: 8px;
-  font: inherit;
-  background: var(--surface);
-  color: inherit;
+  border-radius: 9px;
+  font: 13px/1.4 inherit;
+  background: var(--card);
+  color: var(--ink);
+  outline: none;
 }
 
 input:focus-visible,
 select:focus-visible,
+textarea:focus-visible,
 button:focus-visible,
 .button:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--ink);
   outline-offset: 1px;
+}
+
+input:focus,
+textarea:focus {
+  border-color: var(--ink);
 }
 
 fieldset {
@@ -166,13 +168,18 @@ legend {
 button,
 .button {
   padding: 9px 12px;
-  border: 0;
-  border-radius: 8px;
-  background: linear-gradient(90deg, var(--accent), var(--accent-2));
-  color: var(--on-accent);
-  font: inherit;
-  font-weight: 600;
+  border: none;
+  border-radius: 9px;
+  background: var(--accent);
+  color: var(--ink);
+  font-family: inherit;
+  font-weight: 700;
   cursor: pointer;
+}
+
+button:hover,
+.button:hover {
+  background: var(--accent-hover);
 }
 
 .button {
@@ -184,10 +191,67 @@ button,
   text-decoration: none;
 }
 
-button.secondary {
+.app-header .button {
+  border-radius: 999px;
+  padding: 7px 12px;
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+
+.icon-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  padding: 0;
+  border-radius: 10px;
+  border: 1px solid #4a4a3e;
   background: transparent;
-  color: inherit;
-  border: 1px solid var(--border);
+  color: var(--accent);
+}
+
+.icon-button:hover {
+  border-color: var(--accent);
+  background: rgba(200, 245, 66, 0.12);
+}
+
+.cta {
+  width: 100%;
+  padding: 12px 0;
+  border-radius: 10px;
+  font-size: 14.5px;
+  font-weight: 900;
+  letter-spacing: -0.2px;
+  box-shadow: 0 3px 10px rgba(200, 245, 66, 0.35);
+}
+
+button.secondary {
+  background: var(--card);
+  color: var(--ink);
+  border: 1px solid var(--border-strong);
+  font-weight: 700;
+}
+
+button.secondary:hover {
+  background: var(--card);
+  border-color: var(--ink);
+}
+
+.link-danger {
+  align-self: flex-start;
+  padding: 0;
+  background: transparent;
+  color: var(--danger);
+  font-size: 11.5px;
+  font-weight: 400;
+  text-decoration: none;
+}
+
+.link-danger:hover {
+  background: transparent;
+  text-decoration: underline;
 }
 
 button:disabled {
@@ -195,39 +259,39 @@ button:disabled {
   cursor: progress;
 }
 
-.actions {
-  display: flex;
+.actions-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 8px;
 }
 
-.actions button {
-  flex: 1;
-}
-
-.settings {
-  border-top: 1px solid var(--border);
-  padding-top: 12px;
+.actions-grid button {
+  padding: 8px 0;
+  font-size: 12.5px;
 }
 
 dl {
   margin: 0;
   display: grid;
   grid-template-columns: auto 1fr;
-  gap: 4px 10px;
+  gap: 6px 14px;
+  font-size: 12px;
 }
 
 dt {
   font-weight: 600;
+  color: var(--muted-2);
 }
 
 dd {
   margin: 0;
   overflow-wrap: anywhere;
+  color: var(--ink);
 }
 
 .monospace {
   font-family: ui-monospace, monospace;
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .qr {
@@ -238,13 +302,13 @@ dd {
   gap: 6px;
 }
 
-/* The QR is rendered black-on-white for reliable scanning in any theme, so it sits on
-   its own white card with a quiet border. */
+/* The QR is rendered black-on-white for reliable scanning, so it sits on its own white
+   card with a quiet border. */
 .qr-canvas {
   background: #ffffff;
   padding: 8px;
   border-radius: 8px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
   width: 160px;
   height: 160px;
 }
@@ -256,7 +320,7 @@ dd {
 }
 
 .qr figcaption {
-  color: var(--muted);
+  color: var(--muted-2);
   font-size: 12px;
   text-align: center;
 }
@@ -268,11 +332,11 @@ dd {
   opacity: 0.85;
 }
 
-/* Sits directly under the Service URL field, so it reads as a note on that field
-   rather than a separate form row. */
+/* Sits directly under the field it explains, so it reads as a note on that field rather
+   than a separate form row. */
 .field-hint {
-  margin: -6px 0 0;
-  color: var(--muted);
+  margin: -4px 0 0;
+  color: var(--muted-2);
   font-size: 12px;
 }
 
@@ -282,22 +346,24 @@ dd {
 
 /* Build stamp: present but quiet, so it never competes with the sync controls. */
 .build-info {
-  margin: 0;
+  margin: 2px 0 0;
   text-align: center;
-  color: var(--muted);
+  color: var(--muted-2);
   font-family: ui-monospace, monospace;
-  font-size: 11px;
+  font-size: 10.5px;
 }
 
 .message {
   margin: 0;
   padding: 9px 11px;
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--accent) 30%, var(--card));
+  font-size: 13px;
 }
 
 .message.error {
-  background: color-mix(in srgb, var(--danger) 18%, transparent);
+  background: color-mix(in srgb, var(--danger) 18%, var(--card));
+  color: var(--danger);
 }
 
 .badge {
@@ -305,11 +371,11 @@ dd {
 }
 
 .badge-online {
-  color: var(--success);
+  color: var(--online);
 }
 
 .badge-limited {
-  color: color-mix(in srgb, var(--danger) 40%, var(--success) 60%);
+  color: var(--limited);
 }
 
 .badge-offline {
@@ -320,53 +386,57 @@ dd {
   margin: 0;
   padding: 8px 10px;
   border-radius: 8px;
-  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
   color: var(--muted);
   font-size: 12px;
   font-style: italic;
 }
 
 .service-message a {
-  color: var(--accent);
+  color: var(--ink);
 }
 
 .data-usage {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 5px;
 }
 
 .data-usage-header {
   display: flex;
   justify-content: space-between;
-  font-weight: 600;
-  font-size: 12px;
+  font-size: 11.5px;
+  color: var(--muted-2);
+}
+
+#data-usage-percent {
+  font-weight: 700;
+  color: var(--ink);
 }
 
 .data-usage-bar {
-  height: 6px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--text) 10%, transparent);
+  height: 5px;
+  border-radius: 3px;
+  background: #e4e2d2;
   overflow: hidden;
 }
 
 .data-usage-fill {
   height: 100%;
-  border-radius: inherit;
-  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  border-radius: 3px;
+  background: var(--ink);
 }
 
 .data-usage-detail {
   margin: 0;
-  color: var(--muted);
+  color: var(--muted-2);
   font-size: 12px;
 }
 
-/* The page editor sits above the sync status: it is what the popup is opened for most
-   often, while the status below it is mostly there to be glanced at. */
+/* The page editor sits above setup/status: it is what the popup is opened for most
+   often, while the rest is mostly there to be glanced at. */
 .page-meta {
-  padding-bottom: 14px;
-  border-bottom: 1px solid var(--border);
+  gap: 10px;
 }
 
 /* The page's own title, shown so it is obvious which bookmark is being edited. Clamped
@@ -374,23 +444,95 @@ dd {
    popup this narrow. */
 .page-meta-title {
   margin: 0;
-  font-weight: 600;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+textarea {
+  width: 100%;
+  box-sizing: border-box;
+  resize: none;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  font: 13px/1.4 inherit;
+  background: var(--card);
+  color: var(--ink);
+  outline: none;
+}
+
+/* -- Sync status: collapsed row + expandable panel -------------------------------- */
+
+/* Bleeds out to the popup's full width — #app's own side padding does not apply here
+   — but keeps normal flow below it, since build-info (not part of this design) still
+   follows as the next element in the card. */
+.status {
+  margin: 4px -16px 0;
+}
+
+.status-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: none;
+  border-top: 1px solid var(--border-soft);
+  background: var(--card-alt);
+  cursor: pointer;
+  padding: 10px 16px;
+  font-family: inherit;
+  text-align: left;
+}
+
+.status-toggle:hover {
+  background: color-mix(in srgb, var(--card-alt) 85%, var(--ink) 4%);
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--muted-2);
+}
+
+.status-dot.status-dot-online {
+  background: var(--online);
+}
+
+.status-dot.status-dot-limited {
+  background: var(--limited);
+}
+
+.status-dot.status-dot-offline {
+  background: var(--danger);
+}
+
+.status-line {
+  font-size: 12.5px;
+  color: var(--muted);
+  flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-textarea {
-  padding: 8px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  font: inherit;
-  background: var(--surface);
-  color: inherit;
-  resize: vertical;
+.status-chevron {
+  font-size: 11px;
+  color: var(--muted-2);
 }
 
-textarea:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
+.status-details {
+  border-top: 1px solid var(--border-soft);
+  background: var(--card-alt);
+  padding: 12px 16px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }

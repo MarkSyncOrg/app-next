@@ -5,7 +5,6 @@ import {
   parseBackup,
   type Settings,
   type SyncDirection,
-  type Theme,
 } from '@marksyncorg/core';
 import { buildDescription, currentBuild, versionLabel } from '../../src/build-info';
 import { formatLog } from '../../src/logging/log-entry';
@@ -55,7 +54,6 @@ function el<T extends HTMLElement>(id: string): T {
 }
 
 const message = el('message');
-const themeSelect = el<HTMLSelectElement>('set-theme');
 const intervalSelect = el<HTMLSelectElement>('set-interval');
 const toolbarCheck = el<HTMLInputElement>('set-toolbar');
 const onChangeCheck = el<HTMLInputElement>('set-on-change');
@@ -63,6 +61,7 @@ const directionSelect = el<HTMLSelectElement>('set-direction');
 const directionHint = el('direction-hint');
 const exportButton = el<HTMLButtonElement>('export-backup');
 const importFile = el<HTMLInputElement>('import-file');
+const importFileLabel = el('import-file-label');
 const restoreButton = el<HTMLButtonElement>('restore-backup');
 const logOutput = el('log-output');
 
@@ -80,14 +79,6 @@ function showMessage(text: string, isError = false): void {
   void log.log(isError ? 'warn' : 'info', `Shown to the user: ${text}`);
 }
 
-function applyTheme(theme: Theme): void {
-  if (theme === 'system') {
-    delete document.documentElement.dataset.theme;
-  } else {
-    document.documentElement.dataset.theme = theme;
-  }
-}
-
 /** Triggers a client-side download of text content. */
 function downloadText(filename: string, text: string): void {
   const url = URL.createObjectURL(new Blob([text], { type: 'text/plain' }));
@@ -102,7 +93,6 @@ function downloadText(filename: string, text: string): void {
 // --- Settings ---
 
 function renderSettings(settings: Settings): void {
-  themeSelect.value = settings.theme;
   intervalSelect.value = String(settings.syncIntervalMinutes);
   toolbarCheck.checked = settings.syncBookmarksToolbar;
   onChangeCheck.checked = settings.syncOnChange;
@@ -111,7 +101,6 @@ function renderSettings(settings: Settings): void {
   // "Sync changes automatically" pushes, so it does nothing on a receive-only device.
   onChangeCheck.disabled = settings.syncDirection === 'pull-only';
   applyDirectionToRecovery(settings.syncDirection);
-  applyTheme(settings.theme);
 }
 
 async function saveSettings(update: Partial<Settings>): Promise<void> {
@@ -124,9 +113,6 @@ async function saveSettings(update: Partial<Settings>): Promise<void> {
   }
 }
 
-themeSelect.addEventListener('change', () => {
-  void saveSettings({ theme: themeSelect.value as Theme });
-});
 intervalSelect.addEventListener('change', () => {
   void saveSettings({ syncIntervalMinutes: Number(intervalSelect.value) });
 });
@@ -157,6 +143,7 @@ exportButton.addEventListener('click', () => {
 importFile.addEventListener('change', () => {
   restoreButton.disabled = !importFile.files?.length;
   const file = importFile.files?.[0];
+  importFileLabel.textContent = file?.name ?? 'No file selected';
   void log.debug('Backup file selected', { selected: Boolean(file), bytes: file?.size });
 });
 
@@ -199,6 +186,7 @@ restoreButton.addEventListener('click', () => {
         successLevel: 'info',
       });
       importFile.value = '';
+      importFileLabel.textContent = 'No file selected';
       showMessage(
         removed.length > 0
           ? `Backup restored. ${removed.length} bookmark(s) with an executable URL were skipped.`

@@ -63,6 +63,9 @@ maybe('a bookmark created on device A appears natively on device B after sync', 
   await popupA.click('#enable');
   await expect(popupA.locator('#status')).toBeVisible();
 
+  // The service/usage/QR panel is collapsed behind a summary row by default.
+  await popupA.click('#status-toggle');
+
   const syncId = (await popupA.locator('#status-sync-id').textContent())?.trim() ?? '';
   expect(syncId).toMatch(/^[a-f0-9]{32}$/);
 

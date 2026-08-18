@@ -8,63 +8,63 @@
          the force pull/push buttons. -->
     <meta name="manifest.open_in_tab" content="true" />
     <title>MarkSync — Settings</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;700;900&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="./style.css" />
   </head>
   <body>
-    <main id="app">
-      <header class="app-header">
-        <img src="/icon/48.png" alt="" width="32" height="32" />
-        <h1>MarkSync</h1>
-        <a
-          id="site-link"
-          class="button site-link"
-          href="https://app.marksync.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Open the MarkSync web app
-          <span aria-hidden="true">↗</span>
-        </a>
-      </header>
+    <header class="app-header">
+      <img src="/icon/48.png" alt="" width="22" height="22" class="app-mark" />
+      <h1>MarkSync <span class="app-subtitle">Settings</span></h1>
+      <a
+        id="site-link"
+        class="button site-link"
+        href="https://app.marksync.org"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        Web app <span aria-hidden="true">↗</span>
+      </a>
+    </header>
 
+    <main id="app">
       <p id="message" class="message" hidden></p>
 
       <section class="card">
-        <h2>Settings</h2>
-        <label>
-          Theme
-          <select id="set-theme">
-            <option value="system">System</option>
-            <option value="light">Light</option>
-            <option value="dark">Dark</option>
-          </select>
-        </label>
-        <label>
-          Auto-sync
-          <select id="set-interval">
-            <option value="0">Off</option>
-            <option value="15">Every 15 minutes</option>
-            <option value="30">Every 30 minutes</option>
-            <option value="60">Every hour</option>
-          </select>
-        </label>
-        <label class="checkbox">
-          <input type="checkbox" id="set-toolbar" />
-          Sync bookmarks toolbar
-        </label>
-        <label class="checkbox">
-          <input type="checkbox" id="set-on-change" />
-          Sync changes automatically
-        </label>
-        <label>
-          Sync direction
-          <select id="set-direction">
-            <option value="two-way">Two-way (send and receive)</option>
-            <option value="push-only">Send only (source)</option>
-            <option value="pull-only">Receive only (mirror)</option>
-          </select>
-        </label>
+        <h2>Sync</h2>
+        <div class="field-grid">
+          <label>
+            Auto-sync
+            <select id="set-interval">
+              <option value="0">Off</option>
+              <option value="15">Every 15 minutes</option>
+              <option value="30">Every 30 minutes</option>
+              <option value="60">Every hour</option>
+            </select>
+          </label>
+          <label>
+            Sync direction
+            <select id="set-direction">
+              <option value="two-way">Two-way (send and receive)</option>
+              <option value="push-only">Send only (source)</option>
+              <option value="pull-only">Receive only (mirror)</option>
+            </select>
+          </label>
+        </div>
         <p class="hint" id="direction-hint"></p>
+        <div class="checkbox-group">
+          <label class="checkbox">
+            <input type="checkbox" id="set-toolbar" />
+            Sync bookmarks toolbar
+          </label>
+          <label class="checkbox">
+            <input type="checkbox" id="set-on-change" />
+            Sync changes automatically
+          </label>
+        </div>
       </section>
 
       <section class="card">
@@ -75,42 +75,50 @@
         </p>
         <div class="actions">
           <button id="export-backup" type="button">Export backup</button>
+          <label class="button secondary" for="import-file">Restore from file…</label>
+          <input id="import-file" type="file" accept=".txt,.json,application/json" hidden />
+          <span id="import-file-label" class="hint">No file selected</span>
         </div>
-        <label>
-          Restore from file
-          <input id="import-file" type="file" accept=".txt,.json,application/json" />
-        </label>
         <div class="actions">
-          <button id="restore-backup" type="button" disabled>Restore backup</button>
-        </div>
-      </section>
-
-      <section class="card">
-        <h2>Conflict recovery</h2>
-        <p class="hint">
-          Use these only when sync is stuck in a conflict. Force pull discards this device's
-          bookmarks and replaces them with the server copy. Force push overwrites the server with
-          this device's bookmarks. Both bypass the usual conflict check, but not the sync direction:
-          the one that would send or receive against it is unavailable.
-        </p>
-        <div class="actions">
-          <button id="force-pull" type="button" class="secondary">Force pull from server</button>
-          <button id="force-push" type="button" class="secondary">Force push to server</button>
+          <button id="restore-backup" type="button" class="secondary" disabled>
+            Restore backup
+          </button>
         </div>
       </section>
 
       <section class="card">
-        <h2>Debug log</h2>
-        <p class="hint">
-          Activity from the popup, the settings page and background sync, useful for
-          troubleshooting. The log rotates daily: the last 7 days are kept, older days are dropped
-          automatically. Passwords are never recorded, and bookmarks appear only as counts.
-        </p>
-        <pre id="log-output" class="log" aria-live="polite"></pre>
-        <div class="actions">
-          <button id="refresh-log" type="button" class="secondary">Refresh</button>
-          <button id="download-log" type="button" class="secondary">Download</button>
-          <button id="clear-log" type="button" class="secondary">Clear</button>
+        <h2>Advanced</h2>
+
+        <div class="subsection">
+          <div class="subsection-title">Conflict recovery</div>
+          <p class="hint">
+            Use these only when sync is stuck in a conflict. Force pull discards this device's
+            bookmarks and replaces them with the server copy. Force push overwrites the server with
+            this device's bookmarks. Both bypass the usual conflict check, but not the sync
+            direction: the one that would send or receive against it is unavailable.
+          </p>
+          <div class="actions">
+            <button id="force-pull" type="button" class="secondary danger-hover">
+              Force pull from server
+            </button>
+            <button id="force-push" type="button" class="secondary danger-hover">
+              Force push to server
+            </button>
+          </div>
+        </div>
+
+        <div class="subsection">
+          <div class="subsection-title-row">
+            <div class="subsection-title">Debug log</div>
+            <button id="refresh-log" type="button" class="link-button">Refresh</button>
+            <button id="download-log" type="button" class="link-button">Download</button>
+            <button id="clear-log" type="button" class="link-button danger">Clear</button>
+          </div>
+          <p class="hint">
+            Last 7 days of activity, useful for troubleshooting. Passwords are never recorded;
+            bookmarks appear only as counts.
+          </p>
+          <pre id="log-output" class="log" aria-live="polite"></pre>
         </div>
       </section>
 

@@ -1,42 +1,15 @@
-/* Palette from the legacy xBrowserSync client (_colors-default / _colors-dark). */
+/* Brand palette from the marksync.org site assets — fixed dark header/cream card look,
+   no light/dark theme switching (see the "Settings" design handoff). */
 :root {
-  --bg: #edfeff;
-  --surface: #ffffff;
-  --text: #083039;
-  --muted: #75959c;
-  --accent: #01ab8a;
-  --accent-2: #35c6e8;
-  --on-accent: #edfeff;
-  --success: #30d278;
-  --danger: #ea3869;
-  --border: color-mix(in srgb, var(--text) 15%, transparent);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #1e2228;
-    --surface: #2d333b;
-    --text: #cdd9e5;
-    --muted: #8a96a3;
-    --on-accent: #edfeff;
-    --border: #474f5b;
-  }
-}
-
-:root[data-theme='dark'] {
-  --bg: #1e2228;
-  --surface: #2d333b;
-  --text: #cdd9e5;
-  --muted: #8a96a3;
-  --border: #474f5b;
-}
-
-:root[data-theme='light'] {
-  --bg: #edfeff;
-  --surface: #ffffff;
-  --text: #083039;
-  --muted: #75959c;
-  --border: color-mix(in srgb, var(--text) 15%, transparent);
+  --ink: #17170f;
+  --card: #fffef8;
+  --muted: #5c5b4e;
+  --muted-2: #8b8a7a;
+  --border: #dedcc9;
+  --border-strong: #d3d1bd;
+  --accent: #c8f542;
+  --accent-hover: #d6fa6a;
+  --danger: #b04a3e;
 }
 
 * {
@@ -49,101 +22,167 @@
 
 body {
   margin: 0;
-  font:
-    14px/1.45 system-ui,
-    sans-serif;
-  background: var(--bg);
-  color: var(--text);
-}
-
-#app {
-  max-width: 640px;
-  margin: 0 auto;
-  padding: 24px 20px 48px;
+  background: var(--ink);
+  color: var(--ink);
+  font-family: 'Archivo', Helvetica, Arial, sans-serif;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  align-items: center;
+}
+
+a {
+  color: var(--muted);
+}
+
+a:hover {
+  color: var(--ink);
 }
 
 .app-header {
+  width: 100%;
+  box-sizing: border-box;
   display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 10px;
+  justify-content: center;
+  background: var(--ink);
 }
 
-h1 {
+.app-header .app-mark {
+  display: block;
+}
+
+.app-header h1 {
   margin: 0;
-  font-size: 20px;
-  background: linear-gradient(90deg, var(--accent), var(--accent-2));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  flex: 1;
+  font-size: 18px;
+  font-weight: 900;
+  letter-spacing: -0.5px;
+  color: #ffffff;
+}
+
+.app-subtitle {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--muted-2);
+  margin-left: 8px;
+}
+
+.app-header,
+#app {
+  width: 640px;
+  max-width: 92vw;
+}
+
+.app-header {
+  align-items: center;
+  gap: 10px;
+  padding: 16px 0;
+}
+
+#app {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 22px 0 48px;
 }
 
 h2 {
   margin: 0;
   font-size: 15px;
+  font-weight: 900;
+  letter-spacing: -0.3px;
 }
 
 .card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 16px;
+  background: var(--card);
+  border-radius: 14px;
+  padding: 20px 22px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
+  color: var(--ink);
+}
+
+.field-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
 }
 
 .hint {
   margin: 0;
-  color: var(--muted);
+  font-size: 12.5px;
+  color: var(--muted-2);
+  line-height: 1.5;
+}
+
+.checkbox-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 label {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  font-weight: 600;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--muted);
 }
 
 label.checkbox {
   flex-direction: row;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  font-size: 13.5px;
   font-weight: 400;
+  color: var(--ink);
+  cursor: pointer;
 }
 
-input[type='file'],
+input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--ink);
+}
+
 select {
-  padding: 8px;
+  appearance: auto;
   border: 1px solid var(--border);
-  border-radius: 8px;
-  font: inherit;
-  background: var(--bg);
-  color: inherit;
+  border-radius: 9px;
+  padding: 9px 10px;
+  font-size: 13.5px;
+  font-family: inherit;
+  font-weight: 400;
+  color: var(--ink);
+  background: var(--card);
 }
 
 input:focus-visible,
 select:focus-visible,
 button:focus-visible,
 .button:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--ink);
   outline-offset: 1px;
 }
 
 /* .button is the same control rendered as an anchor, for links that leave the page. */
 button,
 .button {
-  padding: 9px 14px;
-  border: 0;
-  border-radius: 8px;
-  background: linear-gradient(90deg, var(--accent), var(--accent-2));
-  color: var(--on-accent);
-  font: inherit;
-  font-weight: 600;
+  border: none;
+  background: var(--accent);
+  color: var(--ink);
+  border-radius: 9px;
+  padding: 10px 18px;
+  font-size: 13px;
+  font-weight: 900;
+  font-family: inherit;
   cursor: pointer;
+}
+
+button:hover,
+.button:hover {
+  background: var(--accent-hover);
 }
 
 .button {
@@ -154,67 +193,137 @@ button,
   text-decoration: none;
 }
 
-button.secondary {
-  background: transparent;
-  color: inherit;
-  border: 1px solid var(--border);
+.app-header .button {
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 13px;
 }
 
-button:disabled {
+button.secondary,
+.button.secondary {
+  border: 1px solid var(--border-strong);
+  background: var(--card);
+  color: var(--ink);
+  font-weight: 700;
+}
+
+button.secondary:hover,
+.button.secondary:hover {
+  border-color: var(--ink);
+  background: var(--card);
+}
+
+button.secondary.danger-hover {
+  font-size: 12.5px;
+  padding: 9px 16px;
+}
+
+button.secondary.danger-hover:hover {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.link-button {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 0;
+}
+
+.link-button:hover {
+  background: transparent;
+  color: var(--ink);
+}
+
+.link-button.danger {
+  color: var(--danger);
+}
+
+.link-button.danger:hover {
+  background: transparent;
+  color: var(--danger);
+  text-decoration: underline;
+}
+
+button:disabled,
+.button:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+  background: var(--accent);
+}
+
+button.secondary:disabled {
+  background: var(--card);
 }
 
 .actions {
   display: flex;
-  gap: 8px;
+  gap: 10px;
+  align-items: center;
   flex-wrap: wrap;
+}
+
+.subsection {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.card > .subsection + .subsection {
+  margin-top: 4px;
+}
+
+.subsection-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.subsection-title-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.subsection-title-row .subsection-title {
+  flex: 1;
 }
 
 .log {
   margin: 0;
-  max-height: 240px;
+  max-height: 220px;
   overflow: auto;
-  padding: 10px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--bg);
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--ink);
+  color: #b0afa2;
   font-family: ui-monospace, monospace;
-  font-size: 12px;
+  font-size: 11px;
+  line-height: 1.55;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 
-/* Pushed to the far side of the header, opposite the title; in a window too narrow for
-   both, the header wraps and the button keeps its label on one line. */
-.app-header .site-link {
-  margin-left: auto;
-  white-space: nowrap;
-}
-
-/* The arrow marks the link as leaving the page; decorative, so it carries less weight
-   than the label it follows. */
-.site-link span {
-  font-weight: 400;
-  opacity: 0.85;
-}
-
 /* Build stamp: present but quiet, so it never competes with the settings cards. */
 .build-info {
-  margin: 0;
+  margin: 6px 0 0;
   text-align: center;
-  color: var(--muted);
+  color: var(--muted-2);
   font-family: ui-monospace, monospace;
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .message {
   margin: 0;
   padding: 10px 12px;
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--accent) 30%, var(--card));
+  font-size: 13px;
 }
 
 .message.error {
-  background: color-mix(in srgb, var(--danger) 18%, transparent);
+  background: color-mix(in srgb, var(--danger) 18%, var(--card));
+  color: var(--danger);
 }

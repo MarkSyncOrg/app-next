@@ -30,7 +30,7 @@ test('popup links to the MarkSync website', async ({ context, extensionId }) => 
   // navigating in place would lose whatever the user was doing.
   const link = page.locator('#site-link');
   await expect(link).toBeVisible();
-  await expect(link).toContainText('Open the MarkSync web app');
+  await expect(link).toContainText('Web app');
   await expect(link).toHaveAttribute('href', 'https://app.marksync.org');
   await expect(link).toHaveAttribute('target', '_blank');
   await expect(link).toHaveAttribute('rel', 'noopener noreferrer');

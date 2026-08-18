@@ -5,7 +5,6 @@ test('options page renders settings, backup and log sections', async ({ context,
   await page.goto(`chrome-extension://${extensionId}/options.html`);
 
   // Settings populate from the worker (getSettings), exercising messaging.
-  await expect(page.locator('#set-theme')).toBeVisible();
   await expect(page.locator('#set-interval')).toHaveValue('15');
   await expect(page.locator('#export-backup')).toBeVisible();
   // The log loads from the worker (getLog) and already carries the worker's own
@@ -19,7 +18,7 @@ test('options page renders settings, backup and log sections', async ({ context,
   // Link out to the MarkSync website, opened in a new tab.
   const link = page.locator('#site-link');
   await expect(link).toBeVisible();
-  await expect(link).toContainText('Open the MarkSync web app');
+  await expect(link).toContainText('Web app');
   await expect(link).toHaveAttribute('href', 'https://app.marksync.org');
   await expect(link).toHaveAttribute('target', '_blank');
 });
