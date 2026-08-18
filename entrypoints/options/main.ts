@@ -5,10 +5,12 @@ import {
   parseBackup,
   type Settings,
   type SyncDirection,
+  type Theme,
 } from '@marksyncorg/core';
 import { buildDescription, currentBuild, versionLabel } from '../../src/build-info';
 import { formatLog } from '../../src/logging/log-entry';
 import { createUiLogger } from '../../src/logging/ui-logger';
+import { applyTheme } from '../../src/theme';
 import type { SyncRequest, SyncResponse, SyncResultData } from '../../src/messaging';
 
 const log = createUiLogger('options');
@@ -64,6 +66,8 @@ const importFile = el<HTMLInputElement>('import-file');
 const importFileLabel = el('import-file-label');
 const restoreButton = el<HTMLButtonElement>('restore-backup');
 const logOutput = el('log-output');
+const themeButtons = [...document.querySelectorAll<HTMLButtonElement>('.segment[data-theme]')];
+const themeHint = el('theme-hint');
 
 // Rendered up front rather than from init(): the build identity is exactly what a user
 // is asked for when something is broken, so it must survive a failing settings load.
@@ -93,6 +97,7 @@ function downloadText(filename: string, text: string): void {
 // --- Settings ---
 
 function renderSettings(settings: Settings): void {
+  renderTheme(settings.theme);
   intervalSelect.value = String(settings.syncIntervalMinutes);
   toolbarCheck.checked = settings.syncBookmarksToolbar;
   onChangeCheck.checked = settings.syncOnChange;
@@ -125,6 +130,30 @@ onChangeCheck.addEventListener('change', () => {
 directionSelect.addEventListener('change', () => {
   void saveSettings({ syncDirection: directionSelect.value as SyncDirection });
 });
+
+/**
+ * Paints the segmented control and the page itself. Applying the theme here rather than
+ * only on save means the page follows the setting whichever way it changed — including a
+ * save that the worker rejected, which leaves the old value in place.
+ */
+function renderTheme(theme: Theme): void {
+  applyTheme(theme);
+  for (const button of themeButtons) {
+    button.setAttribute('aria-checked', String(button.dataset.theme === theme));
+  }
+  // 'light' and 'dark' say what they do; only 'system' needs to name what it follows.
+  themeHint.textContent = theme === 'system' ? 'Follows your browser' : '';
+}
+
+for (const button of themeButtons) {
+  button.addEventListener('click', () => {
+    const theme = button.dataset.theme as Theme;
+    // Repaint before the round-trip: the theme is a purely local preference, so waiting
+    // on the worker would leave the click looking ignored.
+    renderTheme(theme);
+    void saveSettings({ theme });
+  });
+}
 
 // --- Backup & restore ---
 
