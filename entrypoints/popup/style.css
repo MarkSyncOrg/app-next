@@ -62,10 +62,21 @@ body {
 }
 
 #app {
-  padding: 16px;
+  padding: 14px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
+  /* A browser-action popup is sized to its own document and then clipped at the
+     browser's ceiling (~600px) with no scrollbar of its own, so anything past that
+     ceiling — the submit button, on a tall setup form under browser zoom — simply
+     cannot be reached. The cap belongs here rather than on <body>: a body's overflow is
+     propagated to the viewport, which leaves the element itself scrolling nothing.
+     `100vh` is what the browser actually offers; the 600px keeps it sane where a popup
+     viewport reports something unhelpful. */
+  max-height: min(600px, 100vh);
+  overflow-y: auto;
+  /* Reserve the scrollbar's width so the layout does not shift when it appears. */
+  scrollbar-gutter: stable;
 }
 
 .app-header {
@@ -99,7 +110,9 @@ form,
 section {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  /* Tight enough that joining an existing sync — the longest form — still fits inside the
+     browser's popup ceiling without scrolling. */
+  gap: 9px;
 }
 
 label {
@@ -107,14 +120,6 @@ label {
   flex-direction: column;
   gap: 4px;
   font-weight: 600;
-}
-
-label.radio,
-label.checkbox {
-  flex-direction: row;
-  align-items: center;
-  gap: 8px;
-  font-weight: 400;
 }
 
 input[type='url'],

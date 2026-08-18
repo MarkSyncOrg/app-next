@@ -80,6 +80,14 @@ while the service sat still are undone from the last-synced tree, so the copy ca
 silently. Both report what they did in the popup ("Remote changes ignored", "Local changes
 undone") and in the debug log.
 
+**Changing your mind later** is safe in both directions. A send-only device never records
+a revision it declined to apply, so switching it back to two-way makes it pull what it
+skipped — or three-way merge, if it has local edits of its own — instead of believing it
+was already up to date. Switching a receive-only device to two-way needs no repair at all:
+local edits it would have undone are simply pushed instead. The one thing to know is that
+the change takes effect from the _next_ sync, so a receive-only device still undoes edits
+made before you switch it.
+
 ### Settings, backup & logs (options page)
 
 The popup is for setup and status — including a **QR code** of the sync ID (under

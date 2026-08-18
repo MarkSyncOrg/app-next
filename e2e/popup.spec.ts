@@ -57,17 +57,18 @@ test('setup form offers a sync direction and explains the first exchange', async
   const page = await context.newPage();
   await page.goto(`chrome-extension://${extensionId}/popup.html`);
 
-  // Two-way by default, so setup behaves as it always did unless the user says otherwise.
+  // Two-way by default, so setup behaves as it always did — and says nothing extra.
   await expect(page.locator('#setup-direction')).toHaveValue('two-way');
-  await expect(page.locator('#setup-direction-hint')).toContainText('start the sync');
+  await expect(page.locator('#setup-direction-hint')).toBeHidden();
 
   // Creating a sync always seeds it from this browser, whatever the direction.
   await page.selectOption('#setup-direction', 'pull-only');
+  await expect(page.locator('#setup-direction-hint')).toBeVisible();
   await expect(page.locator('#setup-direction-hint')).toContainText('the last thing it sends');
 
   // Joining one is where the direction decides which side survives.
-  await page.check('input[name="mode"][value="existing"]');
-  await expect(page.locator('#setup-direction-hint')).toContainText('will be replaced by');
+  await page.selectOption('#setup-mode', 'existing');
+  await expect(page.locator('#setup-direction-hint')).toContainText('Replaced by');
   await page.selectOption('#setup-direction', 'push-only');
-  await expect(page.locator('#setup-direction-hint')).toContainText('will replace');
+  await expect(page.locator('#setup-direction-hint')).toContainText('replaces the bookmarks');
 });

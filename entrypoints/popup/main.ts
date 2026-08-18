@@ -7,7 +7,7 @@ import {
 } from '@marksyncorg/core';
 import { buildDescription, currentBuild, versionLabel } from '../../src/build-info';
 import { createUiLogger } from '../../src/logging/ui-logger';
-import { setupDirectionHint } from '../../src/setup-direction';
+import { type SetupMode, setupDirectionHint } from '../../src/setup-direction';
 import type { SyncRequest, SyncResponse, SyncResultData } from '../../src/messaging';
 import { HostPermissionGate } from '../../src/webext/host-permission';
 
@@ -67,6 +67,7 @@ const syncIdField = el('sync-id-field');
 const syncIdInput = el<HTMLInputElement>('sync-id');
 const passwordInput = el<HTMLInputElement>('password');
 const enableButton = el<HTMLButtonElement>('enable');
+const setupModeSelect = el<HTMLSelectElement>('setup-mode');
 const setupDirectionSelect = el<HTMLSelectElement>('setup-direction');
 const setupDirectionHintText = el('setup-direction-hint');
 
@@ -108,9 +109,8 @@ function clearMessage(): void {
   message.hidden = true;
 }
 
-function selectedMode(): 'new' | 'existing' {
-  const checked = setupForm.querySelector<HTMLInputElement>('input[name="mode"]:checked');
-  return checked?.value === 'existing' ? 'existing' : 'new';
+function selectedMode(): SetupMode {
+  return setupModeSelect.value === 'existing' ? 'existing' : 'new';
 }
 
 function selectedSetupDirection(): SyncDirection {
@@ -119,7 +119,9 @@ function selectedSetupDirection(): SyncDirection {
 
 /** Repaints the setup hint for the current mode/direction pair. */
 function renderSetupDirectionHint(): void {
-  setupDirectionHintText.textContent = setupDirectionHint(selectedMode(), selectedSetupDirection());
+  const hint = setupDirectionHint(selectedMode(), selectedSetupDirection());
+  setupDirectionHintText.textContent = hint ?? '';
+  setupDirectionHintText.hidden = hint === null;
 }
 
 function formatTimestamp(iso: string | undefined): string {
@@ -440,12 +442,10 @@ async function withBusy(
   }
 }
 
-setupForm.querySelectorAll<HTMLInputElement>('input[name="mode"]').forEach((radio) => {
-  radio.addEventListener('change', () => {
-    syncIdField.hidden = selectedMode() !== 'existing';
-    renderSetupDirectionHint();
-    void log.debug('Setup mode changed', { mode: selectedMode() });
-  });
+setupModeSelect.addEventListener('change', () => {
+  syncIdField.hidden = selectedMode() !== 'existing';
+  renderSetupDirectionHint();
+  void log.debug('Setup mode changed', { mode: selectedMode() });
 });
 
 setupDirectionSelect.addEventListener('change', () => {

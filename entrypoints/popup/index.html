@@ -39,17 +39,16 @@
           </a>
         </p>
 
-        <fieldset>
-          <legend>Sync</legend>
-          <label class="radio">
-            <input type="radio" name="mode" value="new" checked />
-            Create a new sync
-          </label>
-          <label class="radio">
-            <input type="radio" name="mode" value="existing" />
-            Use an existing sync ID
-          </label>
-        </fieldset>
+        <!-- A select rather than a radio group: the two read the same, and a popup is
+             capped at the browser's height ceiling, which the bordered fieldset and its
+             legend were spending on nothing the label does not already say. -->
+        <label>
+          Sync
+          <select id="setup-mode">
+            <option value="new">Create a new sync</option>
+            <option value="existing">Use an existing sync ID</option>
+          </select>
+        </label>
 
         <label id="sync-id-field" hidden>
           Sync ID
@@ -65,14 +64,14 @@
           Sync direction
           <select id="setup-direction">
             <option value="two-way">Two-way (send and receive)</option>
-            <option value="push-only">Send only (this device is the source)</option>
-            <option value="pull-only">Receive only (mirror another device)</option>
+            <option value="push-only">Send only (source)</option>
+            <option value="pull-only">Receive only (mirror)</option>
           </select>
         </label>
         <!-- Spells out which side's bookmarks survive the first exchange: that depends on
              the direction *and* on whether a sync is being created or joined, and it is
              the one step the user cannot undo by changing the setting afterwards. -->
-        <p class="field-hint" id="setup-direction-hint"></p>
+        <p class="field-hint" id="setup-direction-hint" hidden></p>
 
         <button id="enable" type="submit">Enable sync</button>
       </form>
