@@ -35,3 +35,17 @@ test('popup links to the MarkSync website', async ({ context, extensionId }) => 
   await expect(link).toHaveAttribute('target', '_blank');
   await expect(link).toHaveAttribute('rel', 'noopener noreferrer');
 });
+
+test('setup form links to the public sync servers list', async ({ context, extensionId }) => {
+  const page = await context.newPage();
+  await page.goto(`chrome-extension://${extensionId}/popup.html`);
+
+  // Opened in a new tab, same as the other site link: the popup is dismissed as
+  // soon as focus leaves it.
+  const link = page.locator('#public-servers-link');
+  await expect(link).toBeVisible();
+  await expect(link).toContainText('Browse public sync servers');
+  await expect(link).toHaveAttribute('href', 'https://marksync.org/#services');
+  await expect(link).toHaveAttribute('target', '_blank');
+  await expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+});

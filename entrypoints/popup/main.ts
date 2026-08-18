@@ -272,6 +272,10 @@ el<HTMLAnchorElement>('site-link').addEventListener('click', () => {
   void log.debug('Opening the MarkSync website');
 });
 
+el<HTMLAnchorElement>('public-servers-link').addEventListener('click', () => {
+  void log.debug('Opening the public sync servers list');
+});
+
 async function init(): Promise<void> {
   await log.debug('Popup opened');
   const settings = await send({ type: 'getSettings' });
