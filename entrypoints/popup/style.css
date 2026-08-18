@@ -258,6 +258,18 @@ dd {
   opacity: 0.85;
 }
 
+/* Sits directly under the Service URL field, so it reads as a note on that field
+   rather than a separate form row. */
+.field-hint {
+  margin: -6px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.field-hint a {
+  color: inherit;
+}
+
 /* Build stamp: present but quiet, so it never competes with the sync controls. */
 .build-info {
   margin: 0;
