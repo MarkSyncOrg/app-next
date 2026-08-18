@@ -17,17 +17,19 @@
   </head>
   <body>
     <header class="app-header">
-      <img src="/icon/48.png" alt="" width="22" height="22" class="app-mark" />
-      <h1>MarkSync <span class="app-subtitle">Settings</span></h1>
-      <a
-        id="site-link"
-        class="button site-link"
-        href="https://app.marksync.org"
-        target="_blank"
-        rel="noopener noreferrer"
-      >
-        Web app <span aria-hidden="true">↗</span>
-      </a>
+      <div class="app-header-row">
+        <img src="/icon/mark.svg" alt="" width="22" height="26" class="app-mark" />
+        <h1>MarkSync <span class="app-subtitle">Settings</span></h1>
+        <a
+          id="site-link"
+          class="button site-link"
+          href="https://app.marksync.org"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Web app <span aria-hidden="true">↗</span>
+        </a>
+      </div>
     </header>
 
     <main id="app">
@@ -64,6 +66,15 @@
             <input type="checkbox" id="set-on-change" />
             Sync changes automatically
           </label>
+        </div>
+        <div class="theme-row">
+          <span class="theme-row-label" id="theme-label">Theme</span>
+          <div class="segmented" role="radiogroup" aria-labelledby="theme-label">
+            <button type="button" class="segment" role="radio" data-theme="system">System</button>
+            <button type="button" class="segment" role="radio" data-theme="light">Light</button>
+            <button type="button" class="segment" role="radio" data-theme="dark">Dark</button>
+          </div>
+          <span class="hint" id="theme-hint"></span>
         </div>
       </section>
 

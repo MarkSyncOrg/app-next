@@ -69,3 +69,47 @@ test('the sync direction selector drives the hint and the recovery buttons', asy
   await page.reload();
   await expect(page.locator('#set-direction')).toHaveValue('pull-only');
 });
+
+test('the theme selector repaints the page and survives a reload', async ({
+  context,
+  extensionId,
+}) => {
+  const page = await context.newPage();
+  await page.goto(`chrome-extension://${extensionId}/options.html`);
+
+  // The default is 'system'; the test browser reports a light preference.
+  await expect(page.locator('.segment[data-theme="system"]')).toHaveAttribute(
+    'aria-checked',
+    'true',
+  );
+  await expect(page.locator('#theme-hint')).toHaveText('Follows your browser');
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+  await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(236, 235, 221)');
+  await expect(page.locator('section.card').first()).toHaveCSS(
+    'background-color',
+    'rgb(255, 254, 248)',
+  );
+
+  // Picking a theme repaints without a reload — the dark palette is what the page shows,
+  // not just what the attribute says.
+  await page.click('.segment[data-theme="dark"]');
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(23, 23, 15)');
+  await expect(page.locator('section.card').first()).toHaveCSS(
+    'background-color',
+    'rgb(34, 34, 26)',
+  );
+  // Only 'system' has something to explain.
+  await expect(page.locator('#theme-hint')).toHaveText('');
+
+  // Reopening proves the choice reached the worker rather than only the DOM.
+  await page.reload();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await expect(page.locator('.segment[data-theme="dark"]')).toHaveAttribute('aria-checked', 'true');
+
+  // The theme is one preference for the whole extension, so the popup follows it too.
+  const popup = await context.newPage();
+  await popup.goto(`chrome-extension://${extensionId}/popup.html`);
+  await expect(popup.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await expect(popup.locator('body')).toHaveCSS('background-color', 'rgb(34, 34, 26)');
+});

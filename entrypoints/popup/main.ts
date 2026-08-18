@@ -12,6 +12,7 @@ import {
 import { buildDescription, currentBuild, versionLabel } from '../../src/build-info';
 import { createUiLogger } from '../../src/logging/ui-logger';
 import { type SetupMode, setupDirectionHint } from '../../src/setup-direction';
+import { applyTheme } from '../../src/theme';
 import type { SyncRequest, SyncResponse, SyncResultData } from '../../src/messaging';
 import { HostPermissionGate } from '../../src/webext/host-permission';
 import { readPageMetadata } from '../../src/webext/page-metadata';
@@ -754,6 +755,9 @@ renderSetupDirectionHint();
 async function init(): Promise<void> {
   await log.debug('Popup opened');
   const settings = await send({ type: 'getSettings' });
+  // The theme is chosen on the settings page, but it is one preference for the whole
+  // extension, so the popup honours it too.
+  applyTheme(settings.theme);
   // Offer the direction this device already had: after a disable, the previous choice is
   // still the one the user means, and setup is where they would otherwise re-pick it.
   setupDirectionSelect.value = settings.syncDirection;

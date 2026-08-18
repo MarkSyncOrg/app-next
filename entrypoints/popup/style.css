@@ -1,19 +1,47 @@
-/* Brand palette from the marksync.org site assets — fixed dark header/cream card look,
-   no light/dark theme switching (see the "Popup" design handoff). */
+/* Brand palette from the marksync.org site assets. The light values live on :root and
+   the dark ones override them under [data-theme='dark'], which src/theme.ts stamps on
+   <html> from the saved Theme setting. The theme is chosen on the settings page; the
+   popup follows it (see the "Popup" and "Settings" design handoffs).
+
+   --ink is the *text* colour, so it flips with the theme. Where the brand's near-black is
+   a surface instead — the header bar, the accent buttons' label, the usage bar — it has
+   its own token so it stays put. */
 :root {
   --ink: #17170f;
   --card: #fffef8;
   --card-alt: #f7f6ec;
   --muted: #5c5b4e;
   --muted-2: #8b8a7a;
+  --placeholder: #a8a798;
   --border: #dedcc9;
   --border-strong: #d3d1bd;
   --border-soft: #ecebdd;
+  --bar-track: #e4e2d2;
+  --bar-fill: #17170f;
   --accent: #c8f542;
   --accent-hover: #d6fa6a;
   --danger: #b04a3e;
   --online: #9fce1f;
   --limited: #d97706;
+  /* Fixed: the header is the brand's dark bar in both themes, and the accent buttons are
+     always near-black-on-lime. */
+  --header-bg: #17170f;
+  --on-accent: #17170f;
+}
+
+[data-theme='dark'] {
+  --ink: #f2f1e6;
+  --card: #22221a;
+  --card-alt: #1b1b14;
+  --muted: #a3a292;
+  --muted-2: #a3a292;
+  --placeholder: #6f6e60;
+  --border: #4a4a3e;
+  --border-strong: #4a4a3e;
+  --border-soft: #3a3a30;
+  --bar-track: #3a3a30;
+  --bar-fill: #c8f542;
+  --danger: #d9705f;
 }
 
 * {
@@ -65,7 +93,7 @@ a:hover {
 
 textarea::placeholder,
 input::placeholder {
-  color: #a8a798;
+  color: var(--placeholder);
 }
 
 .app-header {
@@ -73,7 +101,7 @@ input::placeholder {
   align-items: center;
   gap: 10px;
   padding: 12px 14px;
-  background: var(--ink);
+  background: var(--header-bg);
 }
 
 .app-header .app-mark {
@@ -171,7 +199,7 @@ button,
   border: none;
   border-radius: 9px;
   background: var(--accent);
-  color: var(--ink);
+  color: var(--on-accent);
   font-family: inherit;
   font-weight: 700;
   cursor: pointer;
@@ -417,14 +445,14 @@ dd {
 .data-usage-bar {
   height: 5px;
   border-radius: 3px;
-  background: #e4e2d2;
+  background: var(--bar-track);
   overflow: hidden;
 }
 
 .data-usage-fill {
   height: 100%;
   border-radius: 3px;
-  background: var(--ink);
+  background: var(--bar-fill);
 }
 
 .data-usage-detail {

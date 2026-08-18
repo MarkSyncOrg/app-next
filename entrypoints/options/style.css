@@ -1,15 +1,48 @@
-/* Brand palette from the marksync.org site assets — fixed dark header/cream card look,
-   no light/dark theme switching (see the "Settings" design handoff). */
+/* Brand palette from the marksync.org site assets. The light values live on :root and
+   the dark ones override them under [data-theme='dark'], which src/theme.ts stamps on
+   <html> from the saved Theme setting (see the "Settings" design handoff).
+
+   --ink is the *text* colour, so it flips with the theme. The brand's near-black is a
+   surface in three places that must not flip — the header bar, the accent buttons' label
+   and the log panel — and those carry their own fixed tokens. */
 :root {
+  --page: #ecebdd;
   --ink: #17170f;
   --card: #fffef8;
   --muted: #5c5b4e;
   --muted-2: #8b8a7a;
   --border: #dedcc9;
   --border-strong: #d3d1bd;
+  --divider: #ecebdd;
+  --check-accent: #17170f;
+  --seg-on-bg: #17170f;
+  --seg-on-ink: #c8f542;
+  --seg-off-ink: #5c5b4e;
+  --log-bg: #17170f;
   --accent: #c8f542;
   --accent-hover: #d6fa6a;
   --danger: #b04a3e;
+  /* Fixed: the header is the brand's dark bar in both themes, and the accent buttons are
+     always near-black-on-lime. */
+  --header-bg: #17170f;
+  --on-accent: #17170f;
+}
+
+[data-theme='dark'] {
+  --page: #17170f;
+  --ink: #f2f1e6;
+  --card: #22221a;
+  --muted: #a3a292;
+  --muted-2: #a3a292;
+  --border: #4a4a3e;
+  --border-strong: #4a4a3e;
+  --divider: #3a3a30;
+  --check-accent: #c8f542;
+  --seg-on-bg: #c8f542;
+  --seg-on-ink: #17170f;
+  --seg-off-ink: #b0afa2;
+  --log-bg: #101009;
+  --danger: #d9705f;
 }
 
 * {
@@ -22,7 +55,7 @@
 
 body {
   margin: 0;
-  background: var(--ink);
+  background: var(--page);
   color: var(--ink);
   font-family: 'Archivo', Helvetica, Arial, sans-serif;
   display: flex;
@@ -38,12 +71,22 @@ a:hover {
   color: var(--ink);
 }
 
+/* The bar bleeds to the window's edges while its contents stay on the 640px column the
+   cards use. Two elements, because in light mode the bar is the only dark surface on a
+   cream page: a 640px-wide header would read as a floating black slab. */
 .app-header {
   width: 100%;
   box-sizing: border-box;
   display: flex;
   justify-content: center;
-  background: var(--ink);
+  background: var(--header-bg);
+}
+
+.app-header-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 0;
 }
 
 .app-header .app-mark {
@@ -66,16 +109,10 @@ a:hover {
   margin-left: 8px;
 }
 
-.app-header,
+.app-header-row,
 #app {
   width: 640px;
   max-width: 92vw;
-}
-
-.app-header {
-  align-items: center;
-  gap: 10px;
-  padding: 16px 0;
 }
 
 #app {
@@ -143,7 +180,7 @@ label.checkbox {
 input[type='checkbox'] {
   width: 16px;
   height: 16px;
-  accent-color: var(--ink);
+  accent-color: var(--check-accent);
 }
 
 select {
@@ -171,7 +208,7 @@ button,
 .button {
   border: none;
   background: var(--accent);
-  color: var(--ink);
+  color: var(--on-accent);
   border-radius: 9px;
   padding: 10px 18px;
   font-size: 13px;
@@ -193,7 +230,7 @@ button:hover,
   text-decoration: none;
 }
 
-.app-header .button {
+.app-header-row .button {
   border-radius: 999px;
   padding: 8px 14px;
   font-size: 13px;
@@ -297,13 +334,65 @@ button.secondary:disabled {
   overflow: auto;
   padding: 12px 14px;
   border-radius: 10px;
-  background: var(--ink);
+  background: var(--log-bg);
   color: #b0afa2;
   font-family: ui-monospace, monospace;
   font-size: 11px;
   line-height: 1.55;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+/* Theme picker: a segmented control rather than a select, because there are only three
+   choices and the point of the setting is that the answer is visible at a glance. */
+.theme-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  border-top: 1px solid var(--divider);
+  padding-top: 14px;
+}
+
+.theme-row-label {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.segmented {
+  display: flex;
+  gap: 6px;
+}
+
+.segment {
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  color: var(--seg-off-ink);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.segment:hover {
+  background: transparent;
+  border-color: var(--ink);
+}
+
+.segment[aria-checked='true'] {
+  border-color: var(--seg-on-bg);
+  background: var(--seg-on-bg);
+  color: var(--seg-on-ink);
+}
+
+.segment[aria-checked='true']:hover {
+  background: var(--seg-on-bg);
+  border-color: var(--seg-on-bg);
+}
+
+#theme-hint {
+  font-size: 11.5px;
 }
 
 /* Build stamp: present but quiet, so it never competes with the settings cards. */
