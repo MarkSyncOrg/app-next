@@ -239,7 +239,13 @@ const SERVICE_STATUS_BADGE: Record<
   number,
   { symbol: string; className: string; dotClass: string; label: string; shortLabel: string }
 > = {
-  1: { symbol: '✓', className: 'badge-online', dotClass: 'status-dot-online', label: 'Online', shortLabel: 'Online' },
+  1: {
+    symbol: '✓',
+    className: 'badge-online',
+    dotClass: 'status-dot-online',
+    label: 'Online',
+    shortLabel: 'Online',
+  },
   2: {
     symbol: '✕',
     className: 'badge-offline',
