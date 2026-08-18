@@ -8,7 +8,6 @@ import {
   renderSyncIdQrSvg,
   type SyncDirection,
   type SyncOutcome,
-  type Theme,
 } from '@marksyncorg/core';
 import { buildDescription, currentBuild, versionLabel } from '../../src/build-info';
 import { createUiLogger } from '../../src/logging/ui-logger';
@@ -68,6 +67,11 @@ function el<T extends HTMLElement>(id: string): T {
 const message = el('message');
 const setupForm = el<HTMLFormElement>('setup');
 const statusView = el('status');
+const statusToggle = el<HTMLButtonElement>('status-toggle');
+const statusDetails = el('status-details');
+const statusDot = el('status-dot');
+const statusLine = el('status-line');
+const statusChevron = el('status-chevron');
 const serviceUrlInput = el<HTMLInputElement>('service-url');
 const syncIdField = el('sync-id-field');
 const syncIdInput = el<HTMLInputElement>('sync-id');
@@ -93,15 +97,6 @@ enableButton.disabled = true;
 void hostPermissions.refresh().finally(() => {
   enableButton.disabled = false;
 });
-
-/** Applies the chosen theme to the popup (system theme = follow OS). */
-function applyTheme(theme: Theme): void {
-  if (theme === 'system') {
-    delete document.documentElement.dataset.theme;
-  } else {
-    document.documentElement.dataset.theme = theme;
-  }
-}
 
 function showMessage(text: string, isError = false): void {
   message.textContent = text;
@@ -150,6 +145,32 @@ const SERVICE_REQUEST_TIMEOUT_MS = 8000;
  */
 let renderGeneration = 0;
 
+/**
+ * Pieces of the one-line summary shown on the collapsed status row (e.g. "Online ·
+ * 34 KB of 1 MB · 3% used"). Each best-effort panel (service health, data usage) owns
+ * one piece and repaints the summary when its own piece changes, so the row always
+ * shows the latest of what has resolved so far instead of waiting on all of it.
+ */
+let summaryStatusLabel: string | undefined;
+let summaryDotClass = '';
+let summaryDetail = '';
+
+/** Repaints the collapsed status row from the current summary pieces. */
+function renderStatusSummary(): void {
+  statusLine.textContent = summaryStatusLabel
+    ? `${summaryStatusLabel} · ${summaryDetail}`
+    : summaryDetail;
+  statusDot.className = summaryDotClass ? `status-dot ${summaryDotClass}` : 'status-dot';
+}
+
+statusToggle.addEventListener('click', () => {
+  const willOpen = statusDetails.hidden;
+  statusDetails.hidden = !willOpen;
+  statusToggle.setAttribute('aria-expanded', String(willOpen));
+  statusChevron.textContent = willOpen ? '▲' : '▼';
+  void log.debug('Toggled the sync status panel', { open: willOpen });
+});
+
 async function render(): Promise<void> {
   const status = await send({ type: 'getStatus' });
   await log.debug('Rendering status', {
@@ -171,6 +192,13 @@ async function render(): Promise<void> {
     currentSyncId = status.syncId ?? '';
     hideQr();
     await renderPageMeta();
+
+    // Seeded from what render() already knows, so the collapsed row never shows
+    // nothing while the service badge and data-usage panels are still in flight.
+    summaryStatusLabel = undefined;
+    summaryDotClass = '';
+    summaryDetail = `Updated ${formatTimestamp(status.lastUpdated)}`;
+    renderStatusSummary();
 
     // Deliberately not awaited: these are best-effort network round-trips, and every
     // caller of render() runs inside withBusy, so awaiting them here would keep the
@@ -207,10 +235,25 @@ async function refreshServicePanels(
   }
 }
 
-const SERVICE_STATUS_BADGE: Record<number, { symbol: string; className: string; label: string }> = {
-  1: { symbol: '✓', className: 'badge-online', label: 'Online' },
-  2: { symbol: '✕', className: 'badge-offline', label: 'Offline' },
-  3: { symbol: '⚠', className: 'badge-limited', label: 'Online, not accepting new syncs' },
+const SERVICE_STATUS_BADGE: Record<
+  number,
+  { symbol: string; className: string; dotClass: string; label: string; shortLabel: string }
+> = {
+  1: { symbol: '✓', className: 'badge-online', dotClass: 'status-dot-online', label: 'Online', shortLabel: 'Online' },
+  2: {
+    symbol: '✕',
+    className: 'badge-offline',
+    dotClass: 'status-dot-offline',
+    label: 'Offline',
+    shortLabel: 'Offline',
+  },
+  3: {
+    symbol: '⚠',
+    className: 'badge-limited',
+    dotClass: 'status-dot-limited',
+    label: 'Online, not accepting new syncs',
+    shortLabel: 'Limited',
+  },
 };
 
 /**
@@ -245,6 +288,9 @@ async function renderServiceHealth(
     } else {
       messageEl.hidden = true;
     }
+    summaryStatusLabel = known?.shortLabel ?? label;
+    summaryDotClass = known?.dotClass ?? '';
+    renderStatusSummary();
     return info.maxSyncSize;
   } catch (error) {
     await log.debug('Could not fetch service info', { errorMessage: (error as Error).message });
@@ -277,6 +323,8 @@ async function renderDataUsage(maxSyncSize: number | undefined, generation: numb
     el('data-usage-detail').textContent =
       `${formatBytes(usedBytes)} of ${formatBytes(maxSyncSize)}`;
     container.hidden = false;
+    summaryDetail = `${formatBytes(usedBytes)} of ${formatBytes(maxSyncSize)} · ${percent}% used`;
+    renderStatusSummary();
   } catch (error) {
     await log.debug('Could not fetch sync data usage', { errorMessage: (error as Error).message });
     if (generation === renderGeneration) {
@@ -700,7 +748,6 @@ renderSetupDirectionHint();
 async function init(): Promise<void> {
   await log.debug('Popup opened');
   const settings = await send({ type: 'getSettings' });
-  applyTheme(settings.theme);
   // Offer the direction this device already had: after a disable, the previous choice is
   // still the one the user means, and setup is where they would otherwise re-pick it.
   setupDirectionSelect.value = settings.syncDirection;

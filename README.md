@@ -109,7 +109,7 @@ on whether a sync is being created or joined:
   still downloads and decrypts the existing payload first either way — that is what proves
   the password is right before anything is overwritten.)
 
-The direction then holds everywhere, not just for the "Update Sync" button — background
+The direction then holds everywhere, not just for the "Update sync" button — background
 sync, the automatic push on a bookmark edit, backup restore and the conflict-recovery
 actions all respect it, and the recovery action that would go against it is greyed out. It
 is a per-device setting stored locally, so each browser is configured on its own and the
@@ -133,13 +133,15 @@ made before you switch it.
 ### Settings, backup & logs (options page)
 
 The popup is for the **page editor** (description and tags for the active tab), setup and
-status — including a **QR code** of the sync ID (under "Show QR code") to transfer it to
-another device by scanning, a **service status badge** (online / offline / not accepting
-new syncs) with the operator's message, and a **data-usage bar** showing how much of the
-service's `maxSyncSize` the sync occupies.
-Its actions are "Update Sync" and "Disable Sync". A dedicated **options page** (opened
-from the popup) holds everything else. State persists in `chrome.storage` across
-enable/disable.
+status. Once sync is enabled, status collapses behind a single summary row (a coloured dot
+plus a line such as "Online · 34 KB of 1 MB · 3% used") so the editor stays the thing you
+see first; expanding it reveals a **QR code** of the sync ID (under "Show QR code") to
+transfer it to another device by scanning, a **service status badge** (online / offline /
+not accepting new syncs) with the operator's message, and a **data-usage bar** showing how
+much of the service's `maxSyncSize` the sync occupies.
+Its actions are "Update sync" and "Disable sync". A dedicated **options page** (opened from
+the gear icon in the popup header) holds everything else. State persists in
+`chrome.storage` across enable/disable.
 
 The operator message is untrusted HTML from whichever service the user configured, so
 the popup parses it into an inert document and reduces it to a small allowlist of tags
@@ -147,7 +149,6 @@ the popup parses it into an inert document and reduces it to a small allowlist o
 
 Settings:
 
-- **Theme** — system / light / dark (palette from the legacy client).
 - **Auto-sync** — background sync interval (off / 15 / 30 / 60 min); drives the alarm.
 - **Sync bookmarks toolbar** — include the browser's toolbar/bar in the sync.
 - **Sync changes automatically** — push local bookmark edits as they happen.
@@ -182,12 +183,11 @@ Debug log:
 
 Web app:
 
-- Both surfaces carry an **Open the MarkSync web app** button linking to
-  [app.marksync.org](https://app.marksync.org) — at the foot of the popup, below the
-  settings button so the view's own action (Enable sync / Update Sync) keeps the only accent
-  button above it, and in the options page header, opposite the title. Each is an anchor
-  styled as a primary button (`.button`) that opens in a new tab, so the popup closing on
-  focus loss never interrupts what the user was doing.
+- Both surfaces carry a **Web app** pill button linking to
+  [app.marksync.org](https://app.marksync.org) — in the popup header, next to the settings
+  gear icon, and in the options page header, opposite the title. Each is an anchor styled
+  as a button that opens in a new tab, so the popup closing on focus loss never interrupts
+  what the user was doing.
 
 Build stamp:
 

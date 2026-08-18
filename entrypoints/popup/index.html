@@ -4,16 +4,83 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>MarkSync</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;700;900&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="./style.css" />
   </head>
   <body>
-    <main id="app">
-      <header class="app-header">
-        <img src="/icon/48.png" alt="" width="28" height="28" />
-        <h1>MarkSync</h1>
-      </header>
+    <header class="app-header">
+      <img src="/icon/48.png" alt="" width="22" height="22" class="app-mark" />
+      <h1>MarkSync</h1>
+      <a
+        id="site-link"
+        class="button site-link"
+        href="https://app.marksync.org"
+        target="_blank"
+        rel="noopener noreferrer"
+        title="Open the MarkSync web app"
+      >
+        Web app <span aria-hidden="true">↗</span>
+      </a>
+      <button
+        id="open-options"
+        type="button"
+        class="icon-button"
+        title="Settings, backup &amp; logs"
+      >
+        <svg
+          width="19"
+          height="19"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <circle cx="12" cy="12" r="3"></circle>
+          <path
+            d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"
+          ></path>
+        </svg>
+      </button>
+    </header>
 
+    <main id="app">
       <p id="message" class="message" hidden></p>
+
+      <!-- Description and tags for the page in the active tab. No browser can store
+           either on a bookmark, so they live in the sync alongside it; this is where
+           they are edited. Hidden for pages that cannot be bookmarked into a sync
+           (the extension's own pages, about:/chrome:// URLs, and so on). -->
+      <form id="page-meta" class="page-meta" hidden>
+        <p id="page-meta-title" class="page-meta-title"></p>
+        <p id="page-meta-hint" class="field-hint" hidden></p>
+
+        <label class="sr-only" for="page-description">Description</label>
+        <textarea
+          id="page-description"
+          rows="2"
+          placeholder="Description (optional)"
+          spellcheck="true"
+        ></textarea>
+        <p id="page-description-count" class="field-hint"></p>
+
+        <label class="sr-only" for="page-tags">Tags</label>
+        <input
+          id="page-tags"
+          type="text"
+          placeholder="Tags — comma, separated"
+          autocomplete="off"
+          spellcheck="false"
+        />
+
+        <button id="page-meta-save" type="submit" class="cta">Save</button>
+      </form>
 
       <!-- Setup view: shown when sync is not enabled -->
       <form id="setup" hidden>
@@ -73,98 +140,63 @@
              the one step the user cannot undo by changing the setting afterwards. -->
         <p class="field-hint" id="setup-direction-hint" hidden></p>
 
-        <button id="enable" type="submit">Enable sync</button>
+        <button id="enable" type="submit" class="cta">Enable sync</button>
       </form>
 
       <!-- Status view: shown when sync is enabled -->
-      <section id="status" hidden>
-        <!-- Description and tags for the page in the active tab. No browser can store
-             either on a bookmark, so they live in the sync alongside it; this is where
-             they are edited. Hidden for pages that cannot be bookmarked into a sync
-             (the extension's own pages, about:/chrome:// URLs, and so on). -->
-        <form id="page-meta" class="page-meta" hidden>
-          <h2>This page</h2>
-          <p id="page-meta-title" class="page-meta-title"></p>
-          <p id="page-meta-hint" class="field-hint" hidden></p>
-
-          <label>
-            Description
-            <textarea id="page-description" rows="2" spellcheck="true"></textarea>
-          </label>
-          <p id="page-description-count" class="field-hint"></p>
-
-          <label>
-            Tags
-            <input
-              id="page-tags"
-              type="text"
-              placeholder="comma, separated"
-              autocomplete="off"
-              spellcheck="false"
-            />
-          </label>
-
-          <button id="page-meta-save" type="submit">Save</button>
-        </form>
-
-        <dl>
-          <dt>Service</dt>
-          <dd id="status-service">
-            <span id="status-service-url"></span>
-            <!-- Glyph + colour are the only visual cue, so main.ts sets an aria-label
-                 naming the service state for assistive technology. -->
-            <span id="status-service-badge" class="badge" role="img" hidden></span>
-          </dd>
-          <dt>Sync ID</dt>
-          <dd id="status-sync-id" class="monospace"></dd>
-          <dt>Last updated</dt>
-          <dd id="status-last-updated"></dd>
-          <!-- Both halves are hidden together: a <dt> with no <dd> reads as an empty
-               term to a screen reader. Shown only when the sync is one-way. -->
-          <dt id="status-direction-row" hidden>Direction</dt>
-          <dd id="status-direction" hidden></dd>
-        </dl>
-
-        <p id="service-message" class="service-message" hidden></p>
-
-        <div id="data-usage" class="data-usage" hidden>
-          <div class="data-usage-header">
-            <span>Data usage</span>
-            <span id="data-usage-percent"></span>
-          </div>
-          <div class="data-usage-bar">
-            <div id="data-usage-fill" class="data-usage-fill"></div>
-          </div>
-          <p id="data-usage-detail" class="data-usage-detail"></p>
-        </div>
-
-        <button id="toggle-qr" type="button" class="secondary" aria-expanded="false">
-          Show QR code
+      <section id="status" hidden class="status">
+        <button id="status-toggle" type="button" class="status-toggle" aria-expanded="false">
+          <span id="status-dot" class="status-dot"></span>
+          <span id="status-line" class="status-line"></span>
+          <span id="status-chevron" class="status-chevron" aria-hidden="true">▼</span>
         </button>
-        <figure id="qr" class="qr" hidden>
-          <div id="qr-canvas" class="qr-canvas" role="img" aria-label="Sync ID QR code"></div>
-          <figcaption>Scan to copy this sync ID to another device.</figcaption>
-        </figure>
-        <div class="actions">
-          <button id="sync-now" type="button">Update Sync</button>
-          <button id="disable" type="button" class="secondary">Disable Sync</button>
+
+        <div id="status-details" class="status-details" hidden>
+          <dl>
+            <dt>Service</dt>
+            <dd id="status-service">
+              <span id="status-service-url"></span>
+              <!-- Glyph + colour are the only visual cue, so main.ts sets an aria-label
+                   naming the service state for assistive technology. -->
+              <span id="status-service-badge" class="badge" role="img" hidden></span>
+            </dd>
+            <dt>Sync ID</dt>
+            <dd id="status-sync-id" class="monospace"></dd>
+            <dt>Updated</dt>
+            <dd id="status-last-updated"></dd>
+            <!-- Both halves are hidden together: a <dt> with no <dd> reads as an empty
+                 term to a screen reader. Shown only when the sync is one-way. -->
+            <dt id="status-direction-row" hidden>Direction</dt>
+            <dd id="status-direction" hidden></dd>
+          </dl>
+
+          <p id="service-message" class="service-message" hidden></p>
+
+          <div id="data-usage" class="data-usage" hidden>
+            <div class="data-usage-header">
+              <span>Data usage</span>
+              <span id="data-usage-percent"></span>
+            </div>
+            <div class="data-usage-bar">
+              <div id="data-usage-fill" class="data-usage-fill"></div>
+            </div>
+            <p id="data-usage-detail" class="data-usage-detail"></p>
+          </div>
+
+          <div class="actions-grid">
+            <button id="sync-now" type="button" class="secondary">Update sync</button>
+            <button id="toggle-qr" type="button" class="secondary" aria-expanded="false">
+              Show QR code
+            </button>
+          </div>
+          <figure id="qr" class="qr" hidden>
+            <div id="qr-canvas" class="qr-canvas" role="img" aria-label="Sync ID QR code"></div>
+            <figcaption>Scan to copy this sync ID to another device.</figcaption>
+          </figure>
+
+          <button id="disable" type="button" class="link-danger">Disable sync</button>
         </div>
       </section>
-
-      <button id="open-options" type="button" class="secondary">Settings, backup &amp; logs</button>
-
-      <!-- Below the settings button so the view's own primary action (Enable sync /
-           Sync now) is never flanked by a second accent button. -->
-      <a
-        id="site-link"
-        class="button site-link"
-        href="https://app.marksync.org"
-        target="_blank"
-        rel="noopener noreferrer"
-      >
-        Open the MarkSync web app
-        <span aria-hidden="true">↗</span>
-      </a>
 
       <p id="build-info" class="build-info"></p>
     </main>
