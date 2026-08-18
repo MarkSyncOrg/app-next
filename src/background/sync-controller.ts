@@ -5,6 +5,7 @@ import {
   type Settings,
   SyncConflictError,
   SyncEngine,
+  SyncNotEnabledError,
   type SyncOutcome,
   type SyncStatus,
   SyncStore,
@@ -106,6 +107,8 @@ function summariseResult(request: SyncRequest, data: unknown): LogContext {
       return { outcome: (data as { outcome: SyncOutcome }).outcome };
     case 'getLog':
       return { entries: (data as LogEntry[]).length };
+    case 'getSyncUsage':
+      return { usedBytes: (data as { usedBytes: number }).usedBytes };
     default:
       return {};
   }
@@ -175,6 +178,14 @@ export function initSyncController(): void {
         return engine.getStatus();
       case 'getServiceInfo':
         return new XbrowsersyncApi(request.serviceUrl).getInfo();
+      case 'getSyncUsage': {
+        const info = await store.getSyncInfo();
+        if (!info || !(await store.isSyncEnabled())) {
+          throw new SyncNotEnabledError();
+        }
+        const { bookmarks } = await new XbrowsersyncApi(info.serviceUrl).getSync(info.syncId);
+        return { usedBytes: new TextEncoder().encode(bookmarks).length };
+      }
       case 'enableNewSync': {
         const syncId = await withLock('enableNewSync', () =>
           engine.enableNewSync(request.serviceUrl, request.password),

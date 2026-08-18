@@ -66,6 +66,12 @@ maybe('a bookmark created on device A appears natively on device B after sync', 
   const syncId = (await popupA.locator('#status-sync-id').textContent())?.trim() ?? '';
   expect(syncId).toMatch(/^[a-f0-9]{32}$/);
 
+  // Service status and data usage are fetched live from the contract backend, so this
+  // is the one place they can be exercised against a real xBrowserSync service.
+  await expect(popupA.locator('#status-service-badge')).toBeVisible();
+  await expect(popupA.locator('#data-usage')).toBeVisible();
+  await expect(popupA.locator('#data-usage-detail')).toContainText('of');
+
   // The QR code is the only place the popup turns markup into DOM, and it does so by
   // parsing rather than assigning innerHTML — so assert a real <svg> lands in the page.
   await popupA.click('#toggle-qr');
