@@ -80,12 +80,17 @@ function describeRequest(request: SyncRequest): LogContext {
     case 'getServiceInfo':
       return { serviceUrl: request.serviceUrl };
     case 'enableNewSync':
-      return { serviceUrl: request.serviceUrl, passwordProvided: request.password.length > 0 };
+      return {
+        serviceUrl: request.serviceUrl,
+        passwordProvided: request.password.length > 0,
+        direction: request.direction,
+      };
     case 'enableExistingSync':
       return {
         serviceUrl: request.serviceUrl,
         syncId: syncIdPrefix(request.syncId),
         passwordProvided: request.password.length > 0,
+        direction: request.direction,
       };
     case 'setSettings':
       return { settings: request.settings };
@@ -217,24 +222,30 @@ export function initSyncController(): void {
         return { usedBytes };
       }
       case 'enableNewSync': {
-        const syncId = await withLock('enableNewSync', () =>
-          engine.enableNewSync(request.serviceUrl, request.password),
-        );
+        const syncId = await withLock('enableNewSync', async () => {
+          // Written before the engine runs, and under the same lock, so the setup
+          // exchange itself already follows the direction the user chose.
+          await store.setSettings({ syncDirection: request.direction });
+          return engine.enableNewSync(request.serviceUrl, request.password);
+        });
         await log.info('Created new sync', {
           syncId: syncIdPrefix(syncId),
           serviceUrl: request.serviceUrl,
+          direction: request.direction,
         });
         return { syncId };
       }
       case 'enableExistingSync':
-        await withLock('enableExistingSync', () =>
-          applyRemote(() =>
+        await withLock('enableExistingSync', async () => {
+          await store.setSettings({ syncDirection: request.direction });
+          return applyRemote(() =>
             engine.enableExistingSync(request.serviceUrl, request.syncId, request.password),
-          ),
-        );
+          );
+        });
         await log.info('Enabled existing sync', {
           syncId: syncIdPrefix(request.syncId),
           serviceUrl: request.serviceUrl,
+          direction: request.direction,
         });
         return null;
       case 'sync':

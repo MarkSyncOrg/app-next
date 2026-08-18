@@ -7,6 +7,7 @@ import {
 } from '@marksyncorg/core';
 import { buildDescription, currentBuild, versionLabel } from '../../src/build-info';
 import { createUiLogger } from '../../src/logging/ui-logger';
+import { setupDirectionHint } from '../../src/setup-direction';
 import type { SyncRequest, SyncResponse, SyncResultData } from '../../src/messaging';
 import { HostPermissionGate } from '../../src/webext/host-permission';
 
@@ -66,6 +67,8 @@ const syncIdField = el('sync-id-field');
 const syncIdInput = el<HTMLInputElement>('sync-id');
 const passwordInput = el<HTMLInputElement>('password');
 const enableButton = el<HTMLButtonElement>('enable');
+const setupDirectionSelect = el<HTMLSelectElement>('setup-direction');
+const setupDirectionHintText = el('setup-direction-hint');
 
 // Rendered up front rather than from init(): the build identity is exactly what a user
 // is asked for when something is broken, so it must survive a failing status request.
@@ -108,6 +111,15 @@ function clearMessage(): void {
 function selectedMode(): 'new' | 'existing' {
   const checked = setupForm.querySelector<HTMLInputElement>('input[name="mode"]:checked');
   return checked?.value === 'existing' ? 'existing' : 'new';
+}
+
+function selectedSetupDirection(): SyncDirection {
+  return setupDirectionSelect.value as SyncDirection;
+}
+
+/** Repaints the setup hint for the current mode/direction pair. */
+function renderSetupDirectionHint(): void {
+  setupDirectionHintText.textContent = setupDirectionHint(selectedMode(), selectedSetupDirection());
 }
 
 function formatTimestamp(iso: string | undefined): string {
@@ -431,8 +443,14 @@ async function withBusy(
 setupForm.querySelectorAll<HTMLInputElement>('input[name="mode"]').forEach((radio) => {
   radio.addEventListener('change', () => {
     syncIdField.hidden = selectedMode() !== 'existing';
+    renderSetupDirectionHint();
     void log.debug('Setup mode changed', { mode: selectedMode() });
   });
+});
+
+setupDirectionSelect.addEventListener('change', () => {
+  renderSetupDirectionHint();
+  void log.debug('Setup direction changed', { direction: selectedSetupDirection() });
 });
 
 setupForm.addEventListener('submit', (event) => {
@@ -447,14 +465,16 @@ setupForm.addEventListener('submit', (event) => {
   void withBusy('Enable sync', enableButton, async () => {
     const password = passwordInput.value;
     // Never log the password itself — only whether one was entered.
+    const direction = selectedSetupDirection();
     await log.info('Setup submitted', {
       mode: selectedMode(),
       serviceUrl,
       passwordProvided: password.length > 0,
+      direction,
     });
     await permission;
     if (selectedMode() === 'new') {
-      const { syncId } = await send({ type: 'enableNewSync', serviceUrl, password });
+      const { syncId } = await send({ type: 'enableNewSync', serviceUrl, password, direction });
       showMessage(`Sync created. Save this sync ID to add other devices: ${syncId}`);
     } else {
       await send({
@@ -462,6 +482,7 @@ setupForm.addEventListener('submit', (event) => {
         serviceUrl,
         syncId: syncIdInput.value.trim(),
         password,
+        direction,
       });
       showMessage('Sync enabled.');
     }
@@ -504,10 +525,18 @@ el<HTMLAnchorElement>('public-servers-link').addEventListener('click', () => {
   void log.debug('Opening the public sync servers list');
 });
 
+// Painted from the HTML defaults as the popup opens, so the form never shows an empty
+// hint while init() waits on the worker.
+renderSetupDirectionHint();
+
 async function init(): Promise<void> {
   await log.debug('Popup opened');
   const settings = await send({ type: 'getSettings' });
   applyTheme(settings.theme);
+  // Offer the direction this device already had: after a disable, the previous choice is
+  // still the one the user means, and setup is where they would otherwise re-pick it.
+  setupDirectionSelect.value = settings.syncDirection;
+  renderSetupDirectionHint();
   await render();
 }
 

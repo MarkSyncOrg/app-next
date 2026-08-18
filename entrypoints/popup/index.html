@@ -61,6 +61,19 @@
           <input id="password" type="password" required autocomplete="off" />
         </label>
 
+        <label>
+          Sync direction
+          <select id="setup-direction">
+            <option value="two-way">Two-way (send and receive)</option>
+            <option value="push-only">Send only (this device is the source)</option>
+            <option value="pull-only">Receive only (mirror another device)</option>
+          </select>
+        </label>
+        <!-- Spells out which side's bookmarks survive the first exchange: that depends on
+             the direction *and* on whether a sync is being created or joined, and it is
+             the one step the user cannot undo by changing the setting afterwards. -->
+        <p class="field-hint" id="setup-direction-hint"></p>
+
         <button id="enable" type="submit">Enable sync</button>
       </form>
 

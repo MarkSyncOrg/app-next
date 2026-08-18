@@ -54,11 +54,24 @@ so a second browser's bookmark storage can never push its quirks into the sync:
 | **Receive only** | Mirrors the service; never uploads, and undoes its own local edits. |
 
 A one-way sync is the pair: set the source browser to **send only** and every other
-browser to **receive only**. The direction holds everywhere, not just for the "Update
-Sync" button — background sync, the automatic push on a bookmark edit, backup restore and
-the conflict-recovery actions all respect it, and the recovery action that would go
-against it is greyed out. It is a per-device setting stored locally, so each browser is
-configured on its own and the service is not involved.
+browser to **receive only**. The direction is asked for **at setup**, in the popup, as well
+as being changeable later — otherwise the first exchange would run two-way before the user
+could correct it, and that is the one exchange the setting cannot undo afterwards. The
+setup hint spells out which side survives it, because that depends on the direction _and_
+on whether a sync is being created or joined:
+
+- **Creating** a sync always seeds it from this browser, whatever the direction. On a
+  receive-only device that seed is the last thing it ever sends.
+- **Joining** one as send only uploads this browser's bookmarks over what the sync holds;
+  joining it any other way replaces this browser's bookmarks with the sync's. (Joining
+  still downloads and decrypts the existing payload first either way — that is what proves
+  the password is right before anything is overwritten.)
+
+The direction then holds everywhere, not just for the "Update Sync" button — background
+sync, the automatic push on a bookmark edit, backup restore and the conflict-recovery
+actions all respect it, and the recovery action that would go against it is greyed out. It
+is a per-device setting stored locally, so each browser is configured on its own and the
+service is not involved.
 
 A send-only device wins outright: it uploads over whatever the service holds rather than
 merging, since it is not allowed to resolve a conflict by pulling. A receive-only device
@@ -87,8 +100,8 @@ Settings:
 - **Auto-sync** — background sync interval (off / 15 / 30 / 60 min); drives the alarm.
 - **Sync bookmarks toolbar** — include the browser's toolbar/bar in the sync.
 - **Sync changes automatically** — push local bookmark edits as they happen.
-- **Sync direction** — two-way (default), send only, or receive only. See
-  [One-way sync](#one-way-sync).
+- **Sync direction** — two-way (default), send only, or receive only; also asked for at
+  setup. See [One-way sync](#one-way-sync).
 
 Backup & restore:
 
