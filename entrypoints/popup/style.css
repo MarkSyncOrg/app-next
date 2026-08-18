@@ -66,17 +66,22 @@ body {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  /* A browser-action popup is sized to its own document and then clipped at the
-     browser's ceiling (~600px) with no scrollbar of its own, so anything past that
-     ceiling — the submit button, on a tall setup form under browser zoom — simply
-     cannot be reached. The cap belongs here rather than on <body>: a body's overflow is
-     propagated to the viewport, which leaves the element itself scrolling nothing.
-     `100vh` is what the browser actually offers; the 600px keeps it sane where a popup
-     viewport reports something unhelpful. */
-  max-height: min(600px, 100vh);
+  /* The popup sizes itself to this element, so its height follows the content and
+     changes with the form: showing the sync-ID field or a direction hint makes the
+     window taller, hiding them makes it shorter. The only fixed part is the ceiling.
+
+     A browser caps a popup around 600px and then clips it, with no scrollbar of its
+     own — which is how the submit button became unreachable on a tall setup form. The
+     cap therefore lives here, on the element that can scroll: put on <body> it does
+     nothing, because a body's overflow is propagated to the viewport and the element
+     itself is left scrolling nothing.
+
+     Deliberately a plain length and not `min(600px, 100vh)`: viewport units inside an
+     extension popup are resolved against a viewport that is still being decided from
+     this very element's height, and a browser that answers small collapses the whole
+     window. A length cannot be misread. */
+  max-height: 600px;
   overflow-y: auto;
-  /* Reserve the scrollbar's width so the layout does not shift when it appears. */
-  scrollbar-gutter: stable;
 }
 
 .app-header {
