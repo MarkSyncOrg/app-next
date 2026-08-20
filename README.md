@@ -239,18 +239,25 @@ Install dependencies with `pnpm install`.
 
 ## Publishing
 
-Uploads to the Chrome Web Store and to AMO are automated, through
-[`wxt submit`](https://wxt.dev/guide/essentials/publishing) (a wrapper around
-`publish-browser-extension`, which ships with WXT — nothing extra to install). Two
+Uploads to the Chrome Web Store, to AMO and to the Microsoft Edge Add-ons store are
+automated, through [`wxt submit`](https://wxt.dev/guide/essentials/publishing) (a wrapper
+around `publish-browser-extension`, which ships with WXT — nothing extra to install). Two
 workflows drive it:
 
-| Workflow      | Trigger              | Chrome                        | Firefox                      |
-| ------------- | -------------------- | ----------------------------- | ---------------------------- |
-| `nightly.yml` | 01:00 UTC (schedule) | `default`, submitted publicly | `listed`, submitted publicly |
-| `release.yml` | pushing a `v*` tag   | `default`, submitted publicly | `listed`, submitted publicly |
+| Workflow      | Trigger              | Chrome                        | Firefox                      | Edge               |
+| ------------- | -------------------- | ----------------------------- | ---------------------------- | ------------------ |
+| `nightly.yml` | 01:00 UTC (schedule) | `default`, submitted publicly | `listed`, submitted publicly | submitted publicly |
+| `release.yml` | pushing a `v*` tag   | `default`, submitted publicly | `listed`, submitted publicly | submitted publicly |
 
 Both workflows skip a store whose credentials are missing, so you can configure one store
-first and add the other later.
+first and add the others later.
+
+**Edge ships the Chrome package.** Edge is Chromium and accepts the Chromium zip as-is, so
+neither workflow builds a separate Edge target — they hand `wxt submit --edge-zip` the
+`*-chrome.zip` that `pnpm zip` already produced. That zip is packaged whether or not
+Chrome's own credentials are configured, so Edge can be published on its own. Only an
+Edge-specific manifest difference would justify a `wxt zip -b edge` build, and there is
+none today.
 
 **The nightly publishing straight to the public listings is a pre-1.0 arrangement.** There
 is no stable release yet, so the nightly _is_ the published extension — early users get
@@ -264,6 +271,11 @@ upload step of `nightly.yml`, two lines. The public listing then keeps serving t
 release while nightlies reach only Chrome's trusted testers and an unlisted (signed, never
 listed) Firefox build. Nothing else has to change; `release.yml` is already wired for it.
 
+Edge has no equivalent of those channels: a package is either submitted for review or left
+sitting in the dashboard. The nearest thing is `EDGE_SKIP_SUBMIT_REVIEW: true`, which
+uploads the draft and stops there — testers on Edge then install the zip from the GitHub
+nightly release instead of getting it from the store.
+
 ### A red nightly is usually a Chrome review still open
 
 The Chrome Web Store refuses a new package while the previous one is still in review — the
@@ -273,13 +285,17 @@ uploads happen after the GitHub release is created and published, so a failed up
 costs the artifacts, and the next nightly to run once the review clears carries the newer
 commit anyway. AMO does not have this problem; versions there are independent.
 
-If it turns into noise, the fix is to slow the Chrome uploads down (weekly, say) rather
-than to ignore the error — an upload failing for an unrelated reason looks exactly the
-same.
+Edge behaves like Chrome here: while a submission is in review, the publish call comes
+back `InProgressSubmission` ("Can't publish extension as your extension submission is in
+progress"), so expect the same failure mode from the Edge step, on Microsoft's review
+schedule rather than Google's.
+
+If it turns into noise, the fix is to slow those uploads down (weekly, say) rather than to
+ignore the error — an upload failing for an unrelated reason looks exactly the same.
 
 ### Versions
 
-Both stores reject a version they have already accepted, and `package.json` only moves on
+Every store rejects a version it has already accepted, and `package.json` only moves on
 release, so CI stamps every uploadable build with its own version. A nightly is the
 package's **major.minor** with the workflow run number in the third slot — with
 `package.json` at `2.0.0`, nightlies are `2.0.412`, `2.0.415`, `2.0.418`:
@@ -309,7 +325,7 @@ would show `-dirty` in the build stamp shown in the popup.
 **Nightlies occupy the patch component, so there are no patch releases while they
 publish.** Everything in the `2.0` series now sorts below `2.0.412`, which means a stable
 release has to bump at least the minor: `2.0.412` → `2.1.0`, never `2.0.0` or `2.0.1` —
-both stores would reject those as older than what nightlies already shipped. The next
+every store would reject those as older than what nightlies already shipped. The next
 cycle's nightlies then become `2.1.<run>`, and the release after that `2.2.0`. If patch
 releases become necessary, widening the nightly back to four components
 (`<major>.<minor>.<patch>.<run>`) frees the patch slot again.
@@ -319,7 +335,7 @@ tag — `release.yml` refuses to build when the tag and `package.json` disagree.
 
 ### Credentials
 
-Run `pnpm exec wxt submit init` locally: it walks through both stores and prints the
+Run `pnpm exec wxt submit init` locally: it walks through all three stores and prints the
 values. Add them as repository **secrets** (Settings → Secrets and variables → Actions).
 
 | Secret                                                             | Store  |
@@ -328,11 +344,26 @@ values. Add them as repository **secrets** (Settings → Secrets and variables �
 | `CHROME_CLIENT_ID`, `CHROME_CLIENT_SECRET`, `CHROME_REFRESH_TOKEN` | Chrome |
 | `FIREFOX_EXTENSION_ID`                                             | AMO    |
 | `FIREFOX_JWT_ISSUER`, `FIREFOX_JWT_SECRET`                         | AMO    |
+| `EDGE_PRODUCT_ID`                                                  | Edge   |
+| `EDGE_CLIENT_ID`, `EDGE_API_KEY`                                   | Edge   |
+
+The Edge credentials come from
+[Partner Center → Publish API](https://partner.microsoft.com/dashboard/microsoftedge/publishapi):
+the product ID identifies the listing, and the client ID plus API key authenticate against
+**v1.1** of the Add-ons API. The v1.0 pair (`EDGE_CLIENT_SECRET`, `EDGE_ACCESS_TOKEN_URL`)
+was retired on 1 January 2025 — setting either makes `wxt submit` warn — so neither
+workflow passes them.
+
+Edge also needs the listing to exist before the API will take an upload: the very first
+package has to be submitted by hand in Partner Center, after which the workflows own every
+version that follows. The same is true of the other two stores.
 
 Two optional knobs, both repository **variables** rather than secrets:
 
 - `STORE_DRY_RUN=true` — every upload authenticates and validates but uploads nothing.
-  Worth setting while first wiring the credentials up.
+  Worth setting while first wiring the credentials up. Edge is the exception: v1.1 of its
+  API authenticates with a static key rather than a token exchange, so a dry run only
+  proves the three Edge secrets are set, not that they work.
 - The `store-release` environment gates `release.yml`. Adding required reviewers to it
   (Settings → Environments) makes every public release wait for a human before uploading.
 

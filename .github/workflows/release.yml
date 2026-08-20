@@ -139,6 +139,13 @@ jobs:
             echo 'firefox=false' >> "$GITHUB_OUTPUT"
             echo '::warning::AMO credentials are not configured; the Firefox release was not uploaded.'
           fi
+
+          if have EDGE_PRODUCT_ID && have EDGE_CLIENT_ID && have EDGE_API_KEY; then
+            echo 'edge=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'edge=false' >> "$GITHUB_OUTPUT"
+            echo '::warning::Edge Add-ons credentials are not configured; the Edge release was not uploaded.'
+          fi
         env:
           CHROME_EXTENSION_ID: ${{ secrets.CHROME_EXTENSION_ID }}
           CHROME_CLIENT_ID: ${{ secrets.CHROME_CLIENT_ID }}
@@ -147,11 +154,14 @@ jobs:
           FIREFOX_EXTENSION_ID: ${{ secrets.FIREFOX_EXTENSION_ID }}
           FIREFOX_JWT_ISSUER: ${{ secrets.FIREFOX_JWT_ISSUER }}
           FIREFOX_JWT_SECRET: ${{ secrets.FIREFOX_JWT_SECRET }}
+          EDGE_PRODUCT_ID: ${{ secrets.EDGE_PRODUCT_ID }}
+          EDGE_CLIENT_ID: ${{ secrets.EDGE_CLIENT_ID }}
+          EDGE_API_KEY: ${{ secrets.EDGE_API_KEY }}
 
       # The stores get the build before the GitHub release is created: a rejected upload
       # should not leave a published release advertising a version no store carries.
       - name: Upload to the public store channels
-        if: steps.stores.outputs.chrome == 'true' || steps.stores.outputs.firefox == 'true'
+        if: steps.stores.outputs.chrome == 'true' || steps.stores.outputs.firefox == 'true' || steps.stores.outputs.edge == 'true'
         run: |
           set -euo pipefail
           args=()
@@ -164,21 +174,31 @@ jobs:
             args+=(--firefox-zip "$(echo .output/*-firefox.zip)")
             args+=(--firefox-sources-zip "$(echo .output/*-sources.zip)")
           fi
+          if [ "${EDGE_CONFIGURED}" = 'true' ]; then
+            # Edge is Chromium and takes the Chrome package as-is, so there is no separate
+            # Edge build; the zip is packaged above whether or not Chrome is configured.
+            args+=(--edge-zip "$(echo .output/*-chrome.zip)")
+          fi
           pnpm exec wxt submit "${args[@]}"
         env:
           CHROME_CONFIGURED: ${{ steps.stores.outputs.chrome }}
           FIREFOX_CONFIGURED: ${{ steps.stores.outputs.firefox }}
+          EDGE_CONFIGURED: ${{ steps.stores.outputs.edge }}
           CHROME_EXTENSION_ID: ${{ secrets.CHROME_EXTENSION_ID }}
           CHROME_CLIENT_ID: ${{ secrets.CHROME_CLIENT_ID }}
           CHROME_CLIENT_SECRET: ${{ secrets.CHROME_CLIENT_SECRET }}
           CHROME_REFRESH_TOKEN: ${{ secrets.CHROME_REFRESH_TOKEN }}
           # The public audience, submitted for review — the two ways this differs from
-          # the nightly upload.
+          # the nightly upload. Edge is submitted for review by default, so it needs no
+          # equivalent key.
           CHROME_PUBLISH_TARGET: default
           FIREFOX_EXTENSION_ID: ${{ secrets.FIREFOX_EXTENSION_ID }}
           FIREFOX_JWT_ISSUER: ${{ secrets.FIREFOX_JWT_ISSUER }}
           FIREFOX_JWT_SECRET: ${{ secrets.FIREFOX_JWT_SECRET }}
           FIREFOX_CHANNEL: listed
+          EDGE_PRODUCT_ID: ${{ secrets.EDGE_PRODUCT_ID }}
+          EDGE_CLIENT_ID: ${{ secrets.EDGE_CLIENT_ID }}
+          EDGE_API_KEY: ${{ secrets.EDGE_API_KEY }}
           # A manual run defaults to a dry run; the STORE_DRY_RUN repository variable
           # forces one for tag pushes too.
           DRY_RUN: ${{ (inputs.dry_run && 'true') || vars.STORE_DRY_RUN }}
