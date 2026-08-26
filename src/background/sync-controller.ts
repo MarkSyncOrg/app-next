@@ -193,7 +193,7 @@ export function initSyncController(): void {
 
   // Serialises every operation that reads or writes bookmarks/sync state so each
   // push/pull/restore runs atomically. Without it, a concurrent sync or a bookmark
-  // edit can interleave with the destructive setBookmarks and corrupt the remote sync.
+  // edit can interleave with the tree-applying setBookmarks and corrupt the remote sync.
   const lock = new Mutex();
 
   // Non-zero while we are applying remote bookmarks, so the bookmark-change listeners
@@ -253,8 +253,8 @@ export function initSyncController(): void {
    * updated. Writing all of them, rather than the first, is what keeps the result
    * independent of which copy the editor happened to read.
    *
-   * Only the sidecar is touched: nothing in the native tree changes, so this deliberately
-   * avoids the destructive full-tree write that applying a whole tree would mean.
+   * Only the sidecar is touched: nothing in the native tree changes, so this avoids
+   * reading and reconciling the whole tree just to record a description.
    */
   async function writeBookmarkMetadata(
     url: string,
@@ -487,6 +487,16 @@ export function initSyncController(): void {
       await withLock('pushLocalChanges', async () => {
         if (!(await store.isSyncEnabled())) {
           await log.debug('Push skipped: sync is not enabled', { event });
+          return;
+        }
+        if (!(await engine.isDirty())) {
+          // The event was our own write coming back. `applyingRemote` catches almost all
+          // of those, but not quite all: bookmark events are delivered asynchronously, so
+          // one queued behind an apply can arrive after the counter has dropped back to
+          // zero, and the MV3 worker can be restarted in between, taking the counter with
+          // it. Pushing anyway would bump the sync's timestamp for every other device,
+          // each of which then pulls a tree it already has.
+          await log.debug('Push skipped: local bookmarks already match the sync', { event });
           return;
         }
         await log.operation('Push local bookmark changes', () => engine.push(), {

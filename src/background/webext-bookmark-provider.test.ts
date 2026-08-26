@@ -44,6 +44,37 @@ function lookup(id: string): FakeNode | undefined {
   return undefined;
 }
 
+/** Every write the provider made, so a test can assert what it did *not* do. */
+const writes = { create: 0, removeTree: 0, move: 0, update: 0 };
+
+function findParent(node: FakeNode, id: string): FakeNode | undefined {
+  for (const child of node.children ?? []) {
+    if (child.id === id) {
+      return node;
+    }
+    const found = findParent(child, id);
+    if (found) {
+      return found;
+    }
+  }
+  return undefined;
+}
+
+/** Takes a node out of its parent, anywhere in the tree. */
+function detach(id: string): FakeNode | undefined {
+  for (const root of Object.values(roots)) {
+    const parent = findParent(root, id);
+    if (parent) {
+      const [node] = parent.children!.splice(
+        parent.children!.findIndex((child) => child.id === id),
+        1,
+      );
+      return node;
+    }
+  }
+  return undefined;
+}
+
 const bookmarks = {
   getSubTree(id: string) {
     const node = roots[id];
@@ -52,7 +83,8 @@ const bookmarks = {
     }
     return Promise.resolve([node]);
   },
-  create(details: { parentId: string; title?: string; url?: string }) {
+  create(details: { parentId: string; index?: number; title?: string; url?: string }) {
+    writes.create += 1;
     const parent = lookup(details.parentId);
     if (!parent) {
       return Promise.reject(new Error(`No parent ${details.parentId}`));
@@ -64,18 +96,35 @@ const bookmarks = {
       ...(details.url === undefined ? { children: [] } : { url: details.url }),
     };
     parent.children ??= [];
-    parent.children.push(node);
+    parent.children.splice(details.index ?? parent.children.length, 0, node);
+    return Promise.resolve(node);
+  },
+  move(id: string, destination: { parentId: string; index?: number }) {
+    writes.move += 1;
+    const node = detach(id);
+    const parent = lookup(destination.parentId);
+    if (!node || !parent) {
+      return Promise.reject(new Error(`Cannot move ${id}`));
+    }
+    parent.children ??= [];
+    parent.children.splice(destination.index ?? parent.children.length, 0, node);
+    return Promise.resolve(node);
+  },
+  update(id: string, changes: { title?: string; url?: string }) {
+    writes.update += 1;
+    const node = lookup(id);
+    if (!node) {
+      return Promise.reject(new Error(`No node ${id}`));
+    }
+    Object.assign(node, changes);
     return Promise.resolve(node);
   },
   removeTree(id: string) {
-    for (const root of Object.values(roots)) {
-      const parent = root.children?.some((child) => child.id === id) ? root : undefined;
-      if (parent) {
-        parent.children = parent.children!.filter((child) => child.id !== id);
-        return Promise.resolve();
-      }
+    writes.removeTree += 1;
+    if (!detach(id)) {
+      return Promise.reject(new Error(`No node ${id}`));
     }
-    return Promise.reject(new Error(`No node ${id}`));
+    return Promise.resolve();
   },
 };
 
@@ -116,6 +165,7 @@ beforeEach(() => {
     '1': { id: '1', title: 'Bookmarks bar', children: [] },
     '2': { id: '2', title: 'Other bookmarks', children: [] },
   };
+  Object.assign(writes, { create: 0, removeTree: 0, move: 0, update: 0 });
 });
 
 describe('WebextBookmarkProvider metadata', () => {
@@ -204,5 +254,170 @@ describe('WebextBookmarkProvider.createBookmark', () => {
     expect(await provider.createBookmark(BookmarkContainer.Toolbar, 'X', 'https://x.org/')).toBe(
       false,
     );
+  });
+});
+
+/** The Other container, holding the given bookmarks in order. */
+function other(...titles: string[]): Bookmark[] {
+  return [
+    {
+      title: BookmarkContainer.Other,
+      children: titles.map((title) => ({
+        title,
+        url: `https://${title.toLowerCase()}.org/`,
+      })),
+    },
+  ];
+}
+
+/** The Other container's native children, as `title` pairs with their native IDs. */
+function nativeOther(): { title?: string; id: string }[] {
+  return (roots['2']!.children ?? []).map(({ title, id }) => ({ title, id }));
+}
+
+describe('WebextBookmarkProvider.setBookmarks', () => {
+  it('writes nothing at all when the tree already matches', async () => {
+    // The regression behind issue #22: every sync used to empty each container and
+    // rebuild it, so the bookmarks toolbar visibly cleared and refilled even when the
+    // pull carried no change at all.
+    const { provider } = newProvider();
+    await provider.setBookmarks(other('A', 'B', 'C'));
+    const before = nativeOther();
+    Object.assign(writes, { create: 0, removeTree: 0, move: 0, update: 0 });
+
+    await provider.setBookmarks(other('A', 'B', 'C'));
+
+    expect(writes).toEqual({ create: 0, removeTree: 0, move: 0, update: 0 });
+    // Same nodes, not replacements: a rebuild would have handed out fresh IDs.
+    expect(nativeOther()).toEqual(before);
+  });
+
+  it('adds and removes only the bookmarks that differ', async () => {
+    const { provider } = newProvider();
+    await provider.setBookmarks(other('A', 'B', 'C'));
+    const kept = nativeOther().filter(({ title }) => title !== 'B');
+    Object.assign(writes, { create: 0, removeTree: 0, move: 0, update: 0 });
+
+    await provider.setBookmarks(other('A', 'C', 'D'));
+
+    expect(writes).toEqual({ create: 1, removeTree: 1, move: 0, update: 0 });
+    expect(nativeOther().map(({ title }) => title)).toEqual(['A', 'C', 'D']);
+    // A and C are the very same nodes they were before D arrived.
+    expect(nativeOther().slice(0, 2)).toEqual(kept);
+  });
+
+  it('reorders by moving, keeping every node', async () => {
+    const { provider } = newProvider();
+    await provider.setBookmarks(other('A', 'B', 'C'));
+    const before = nativeOther();
+    Object.assign(writes, { create: 0, removeTree: 0, move: 0, update: 0 });
+
+    await provider.setBookmarks(other('C', 'A', 'B'));
+
+    expect(writes.create).toBe(0);
+    expect(writes.removeTree).toBe(0);
+    expect(writes.move).toBeGreaterThan(0);
+    expect(nativeOther()).toEqual([before[2], before[0], before[1]]);
+  });
+
+  it('retitles a bookmark in place rather than replacing it', async () => {
+    const { provider } = newProvider();
+    await provider.setBookmarks(other('A'));
+    const [before] = nativeOther();
+    Object.assign(writes, { create: 0, removeTree: 0, move: 0, update: 0 });
+
+    await provider.setBookmarks([
+      { title: BookmarkContainer.Other, children: [{ title: 'Renamed', url: 'https://a.org/' }] },
+    ]);
+
+    expect(writes).toEqual({ create: 0, removeTree: 0, move: 0, update: 1 });
+    expect(nativeOther()).toEqual([{ title: 'Renamed', id: before!.id }]);
+  });
+
+  it('reconciles inside a folder both trees have', async () => {
+    const folder = (...titles: string[]): Bookmark[] => [
+      {
+        title: BookmarkContainer.Other,
+        children: [
+          {
+            title: 'Folder',
+            children: titles.map((title) => ({ title, url: `https://${title}.org/` })),
+          },
+        ],
+      },
+    ];
+    const { provider } = newProvider();
+    await provider.setBookmarks(folder('a', 'b'));
+    const folderId = roots['2']!.children![0]!.id;
+    Object.assign(writes, { create: 0, removeTree: 0, move: 0, update: 0 });
+
+    await provider.setBookmarks(folder('a', 'b', 'c'));
+
+    expect(writes).toEqual({ create: 1, removeTree: 0, move: 0, update: 0 });
+    // The folder itself was never touched, only its contents.
+    expect(roots['2']!.children![0]!.id).toBe(folderId);
+    expect(roots['2']!.children![0]!.children!.map((child) => child.title)).toEqual([
+      'a',
+      'b',
+      'c',
+    ]);
+  });
+
+  it('leaves a container it has no local root for alone', async () => {
+    const { provider } = newProvider();
+    // Chromium has no Menu root; the write must skip it rather than fail.
+    await provider.setBookmarks([
+      { title: BookmarkContainer.Menu, children: [{ title: 'M', url: 'https://m.org/' }] },
+      ...other('A'),
+    ]);
+    expect(nativeOther().map(({ title }) => title)).toEqual(['A']);
+  });
+
+  it('empties a container the tree says is empty', async () => {
+    const { provider } = newProvider();
+    await provider.setBookmarks(other('A', 'B'));
+    Object.assign(writes, { create: 0, removeTree: 0, move: 0, update: 0 });
+
+    await provider.setBookmarks([{ title: BookmarkContainer.Other, children: [] }]);
+
+    expect(writes).toEqual({ create: 0, removeTree: 2, move: 0, update: 0 });
+    expect(nativeOther()).toEqual([]);
+  });
+
+  it('does not rewrite a container the change did not touch', async () => {
+    const { provider } = newProvider();
+    await provider.setBookmarks([
+      { title: BookmarkContainer.Toolbar, children: [{ title: 'T', url: 'https://t.org/' }] },
+      ...other('A'),
+    ]);
+    const toolbarBefore = roots['1']!.children!.map(({ id }) => id);
+    Object.assign(writes, { create: 0, removeTree: 0, move: 0, update: 0 });
+
+    // A bookmark added in Other, on another device: the toolbar must not move.
+    await provider.setBookmarks([
+      { title: BookmarkContainer.Toolbar, children: [{ title: 'T', url: 'https://t.org/' }] },
+      ...other('A', 'B'),
+    ]);
+
+    expect(writes).toEqual({ create: 1, removeTree: 0, move: 0, update: 0 });
+    expect(roots['1']!.children!.map(({ id }) => id)).toEqual(toolbarBefore);
+  });
+
+  it('matches repeats of one URL by position, as the merge does', async () => {
+    const twice = (...titles: string[]): Bookmark[] => [
+      {
+        title: BookmarkContainer.Other,
+        children: titles.map((title) => ({ title, url: 'https://same.org/' })),
+      },
+    ];
+    const { provider } = newProvider();
+    await provider.setBookmarks(twice('First', 'Second'));
+    const before = nativeOther();
+    Object.assign(writes, { create: 0, removeTree: 0, move: 0, update: 0 });
+
+    await provider.setBookmarks(twice('First', 'Second'));
+
+    expect(writes).toEqual({ create: 0, removeTree: 0, move: 0, update: 0 });
+    expect(nativeOther()).toEqual(before);
   });
 });
