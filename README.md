@@ -41,6 +41,32 @@ future work. A device can also be restricted to half of that — see
 The browser↔xBrowserSync bookmark mapping (`src/background/webext-bookmark-provider.ts`)
 is the one piece that still needs validation against real Chrome/Firefox profiles.
 
+#### Applying a tree to the browser
+
+Full-tree is how the sync _travels_; it is not how it lands. Applying a tree
+**reconciles** each container against what the browser already holds and writes only
+the nodes that differ — matching them by the same content-based identity the merge
+uses, so an unchanged bookmark is left completely alone. An apply that carries no
+change therefore writes nothing and raises no bookmark events.
+
+That matters beyond the obvious flicker of a toolbar clearing and refilling. A
+browser keeps things beside a bookmark's title and URL that only it can reproduce —
+the node's ID, the date it was added, a folder's open state, its place in "recently
+added" — and re-creating the node throws all of them away and re-fetches the favicon.
+
+Containers this browser has no root for are neither read nor written: Chromium has no
+bookmarks menu, and the toolbar is left out entirely while that setting is off. Such a
+container is **carried through** the round trip rather than dropped, so this device
+cannot delete from the sync something it merely cannot hold. Without that, two
+browsers of different families never stop overwriting each other's containers.
+
+Separators get the same treatment, since only Firefox has a native one. There is a
+difference, though: a missing container always means the browser has no root for it,
+while a missing separator could equally mean the user deleted it. So the provider
+declares whether this browser can hold separators at all (`holdsSeparators`) and they
+are restored only where it cannot — on Firefox the tree it hands back is the truth, and
+deleting a separator there has to stick.
+
 #### Descriptions and tags
 
 The xBrowserSync bookmark model carries a `description` and `tags`, and no browser has
