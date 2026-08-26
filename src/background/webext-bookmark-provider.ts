@@ -87,6 +87,15 @@ export interface WebextBookmarkProviderOptions {
 }
 
 export class WebextBookmarkProvider implements BookmarkProvider {
+  /**
+   * Only Firefox has a native separator; Chromium has no equivalent and drops the ones
+   * it is asked to write. Saying so lets the sync engine carry the sync's separators
+   * through this device instead of letting its uploads delete them for everyone else —
+   * it cannot tell the difference on its own, because a tree that lost its separators to
+   * the browser and one whose separators the user deleted read exactly the same.
+   */
+  readonly holdsSeparators = import.meta.env.BROWSER === 'firefox';
+
   private readonly log: Logger;
 
   constructor(private readonly options: WebextBookmarkProviderOptions = {}) {
@@ -294,11 +303,10 @@ export class WebextBookmarkProvider implements BookmarkProvider {
   ): Promise<NativeNode | undefined> {
     try {
       if (bookmark.url === SEPARATOR_URL) {
-        // Only Firefox supports native separators; Chromium has no equivalent.
-        // `type` is absent from the shared (Chromium) CreateDetails type.
-        if (import.meta.env.BROWSER !== 'firefox') {
+        if (!this.holdsSeparators) {
           return undefined;
         }
+        // `type` is absent from the shared (Chromium) CreateDetails type.
         const details = { parentId, index, type: 'separator' } as Parameters<
           typeof browser.bookmarks.create
         >[0];

@@ -4,6 +4,7 @@ import {
   BookmarkContainer,
   BookmarkMetadataStore,
   MemoryStorageArea,
+  SEPARATOR_URL,
 } from '@marksyncorg/core';
 
 /**
@@ -416,6 +417,44 @@ describe('WebextBookmarkProvider.setBookmarks', () => {
     Object.assign(writes, { create: 0, removeTree: 0, move: 0, update: 0 });
 
     await provider.setBookmarks(twice('First', 'Second'));
+
+    expect(writes).toEqual({ create: 0, removeTree: 0, move: 0, update: 0 });
+    expect(nativeOther()).toEqual(before);
+  });
+});
+
+describe('WebextBookmarkProvider separators', () => {
+  const withSeparator: Bookmark[] = [
+    {
+      title: BookmarkContainer.Other,
+      children: [
+        { title: 'A', url: 'https://a.org/' },
+        { url: SEPARATOR_URL },
+        { title: 'B', url: 'https://b.org/' },
+      ],
+    },
+  ];
+
+  it('tells the sync engine it cannot hold one', () => {
+    // import.meta.env.BROWSER is unset under vitest, so this is the Chromium build.
+    expect(new WebextBookmarkProvider().holdsSeparators).toBe(false);
+  });
+
+  it('skips it without disturbing the bookmarks around it', async () => {
+    const { provider } = newProvider();
+    await provider.setBookmarks(withSeparator);
+    expect(nativeOther().map(({ title }) => title)).toEqual(['A', 'B']);
+  });
+
+  it('writes nothing when the same tree is applied again', async () => {
+    // The position the separator would have occupied must not shift what follows it,
+    // or every apply would look like a reorder and move B for no reason.
+    const { provider } = newProvider();
+    await provider.setBookmarks(withSeparator);
+    const before = nativeOther();
+    Object.assign(writes, { create: 0, removeTree: 0, move: 0, update: 0 });
+
+    await provider.setBookmarks(withSeparator);
 
     expect(writes).toEqual({ create: 0, removeTree: 0, move: 0, update: 0 });
     expect(nativeOther()).toEqual(before);

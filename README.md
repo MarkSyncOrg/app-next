@@ -59,8 +59,13 @@ bookmarks menu, and the toolbar is left out entirely while that setting is off. 
 container is **carried through** the round trip rather than dropped, so this device
 cannot delete from the sync something it merely cannot hold. Without that, two
 browsers of different families never stop overwriting each other's containers.
-Separators are the one thing still lost this way: Chromium has no equivalent, so a
-device that pushes an edit strips them from the sync for everyone.
+
+Separators get the same treatment, since only Firefox has a native one. There is a
+difference, though: a missing container always means the browser has no root for it,
+while a missing separator could equally mean the user deleted it. So the provider
+declares whether this browser can hold separators at all (`holdsSeparators`) and they
+are restored only where it cannot — on Firefox the tree it hands back is the truth, and
+deleting a separator there has to stick.
 
 #### Descriptions and tags
 
