@@ -8,15 +8,23 @@
 # (GHSA-g7r4-m6w7-qqqr) is a low-severity, dev-server-on-Windows file read — below the
 # `high` audit gate and not exercised by our build.
 overrides:
-  js-yaml: ^4.3.0
+  js-yaml: ^4.3.1
   shell-quote: ^1.9.0
-  postcss: ^8.5.18
+  postcss: ^8.5.23
   adm-zip: ^0.6.0
   # brace-expansion ships two vulnerable major lines in the tree; patch each.
-  brace-expansion@1: 1.1.16
-  brace-expansion@5: 5.0.7
+  brace-expansion@1: 1.1.18
+  brace-expansion@5: 5.0.9
+  nanoid: ^3.3.18
   tmp: ^0.2.7
   uuid: ^11.1.1
+
+# A pin is only as current as the advisory it was written against, and several of these
+# went stale as later advisories raised the floor on the same package: js-yaml (4.3.0 →
+# 4.3.1, !!omap), postcss (8.5.18 → 8.5.23, the incomplete fix for GHSA-6g55-p6wh-862q)
+# and both brace-expansion lines (unbounded intermediate arrays, on top of the expansion
+# -length DoS they were pinned for). nanoid is new here. Re-run `pnpm audit` when
+# touching this block rather than trusting the numbers to still be the fixed ones.
 
 # lzutf8 (transitive, via @marksyncorg/core) writes its optional debug output with
 # `document.body.innerHTML += …`. The branch is dead here — nothing ever asks it to log
@@ -28,6 +36,17 @@ overrides:
 patchedDependencies:
   lzutf8@0.6.3: patches/lzutf8@0.6.3.patch
 
+# KNOWN GAP — the lockfile is not a supply-chain control here today. It carries no
+# `patchedDependencies` section, so it disagrees with the block above and
+# `pnpm install --frozen-lockfile` refuses outright
+# (ERR_PNPM_LOCKFILE_CONFIG_MISMATCH). Every workflow therefore installs with
+# `--no-frozen-lockfile` — CI, nightly and release alike — which means each run
+# re-resolves the tree from the registry instead of building what was reviewed. The
+# `minimumReleaseAge` cooldown below narrows that window but does not close it, and the
+# release job builds what ships to the stores. Fixing it is one `pnpm install` by someone
+# with a GitHub Packages token (the lockfile then records the patch), followed by moving
+# the seven workflow installs back to `--frozen-lockfile`.
+
 # pnpm blocks dependency lifecycle scripts by default. esbuild needs its install script
 # to fetch the platform binary used by vite/wxt; nothing else needs to build.
 allowBuilds:
@@ -36,8 +55,11 @@ allowBuilds:
 
 # Supply-chain cooldown: never install a package version published less than 4 days ago
 # (4 * 24 * 60 = 5760 minutes), giving freshly-published (possibly compromised) releases
-# time to be caught before they enter the tree. Frozen-lockfile installs (CI) are
-# unaffected; this gates new resolutions and dependency updates.
+# time to be caught before they enter the tree. It gates new resolutions — which, until
+# the gap noted above is closed, is what every CI, nightly and release install performs.
+# The line this replaces said frozen-lockfile installs in CI were unaffected by it; there
+# are none, so the cooldown is currently the only thing standing between a fresh upstream
+# release and a build that ships.
 minimumReleaseAge: 5760
 
 # Exempt our own first-party package from the cooldown: it is published by us to a
