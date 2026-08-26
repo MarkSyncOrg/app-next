@@ -268,9 +268,13 @@ export class WebextBookmarkProvider implements BookmarkProvider {
       if (at !== index) {
         // Always a move towards the front: every position before `index` already holds
         // the node the target wants there, so the one being placed sits further along.
-        // That matters — browsers disagree about whether a move index is read before or
-        // after the node leaves its old slot, and the two readings only differ when a
-        // node moves backwards.
+        //
+        // That is load-bearing, not incidental. Browsers disagree about whether a move
+        // index counts the node's own old slot, and moving one *forwards* is where the
+        // two readings part company: asked to move the first of [A,B,C,D] to index 2,
+        // Chromium answers [B,A,C,D] and the plain reading of the spec answers [B,C,A,D].
+        // Moving towards the front, the readings coincide — measured in Chromium, which
+        // puts the last of [A,B,C,D] at index 1 as [A,D,B,C] either way.
         await this.move(parentId, current.id, index);
         order.splice(at, 1);
         order.splice(index, 0, current);
