@@ -67,6 +67,35 @@ function countBookmarks(bookmarks: Bookmark[]): number {
   );
 }
 
+/** The parts of `navigator` browser identification reads, kept narrow so tests can fake it. */
+interface BrandSource {
+  userAgentData?: { brands?: readonly { brand: string; version?: string }[] };
+  userAgent?: string;
+}
+
+/**
+ * The real browser family, distinct from `import.meta.env.BROWSER`'s build target:
+ * Chromium ships the exact same build to Chrome, Edge, Brave, Opera and others, so that
+ * constant alone cannot tell a bug report's browser apart from the rest — which is
+ * exactly the dimension issue #25 turned on (works in Chrome, fails in Edge). Order
+ * matters below: Edge's and Opera's user-agent strings both also contain "Chrome/".
+ */
+export function runtimeBrowserBrand(nav: BrandSource | undefined = globalThis.navigator): string {
+  const brand = nav?.userAgentData?.brands?.find(
+    (entry) => !/not.*brand/i.test(entry.brand),
+  )?.brand;
+  if (brand) {
+    return brand;
+  }
+  const ua = nav?.userAgent ?? '';
+  if (/\bEdg\//.test(ua)) return 'Edge';
+  if (/\bOPR\//.test(ua)) return 'Opera';
+  if (/\bFirefox\//.test(ua)) return 'Firefox';
+  if (/\bChrome\//.test(ua)) return 'Chrome';
+  if (/\bSafari\//.test(ua)) return 'Safari';
+  return 'unknown';
+}
+
 /**
  * BookmarkProvider backed by the WebExtension bookmarks API. This is the single
  * browser-specific seam of the sync engine. `setBookmarks` reconciles each container
@@ -97,6 +126,9 @@ export class WebextBookmarkProvider implements BookmarkProvider {
   readonly holdsSeparators = import.meta.env.BROWSER === 'firefox';
 
   private readonly log: Logger;
+
+  /** Computed once: it does not change over the provider's lifetime. */
+  private readonly browserBrand = runtimeBrowserBrand();
 
   constructor(private readonly options: WebextBookmarkProviderOptions = {}) {
     this.log = options.logger ?? new Logger();
@@ -335,8 +367,10 @@ export class WebextBookmarkProvider implements BookmarkProvider {
     } catch (error) {
       await this.log.failure('Failed to create a bookmark', error, {
         parentId,
+        parent: await this.describeForDiagnostics(parentId),
         kind: bookmark.url ? 'bookmark' : 'folder',
         origin: urlOrigin(bookmark.url),
+        browser: this.browserBrand,
       });
       throw error;
     }
@@ -359,7 +393,11 @@ export class WebextBookmarkProvider implements BookmarkProvider {
     try {
       await browser.bookmarks.update(current.id, { title });
     } catch (error) {
-      await this.log.failure('Failed to retitle a bookmark', error, { id: current.id });
+      await this.log.failure('Failed to retitle a bookmark', error, {
+        id: current.id,
+        node: await this.describeForDiagnostics(current.id),
+        browser: this.browserBrand,
+      });
       throw error;
     }
     return true;
@@ -369,7 +407,13 @@ export class WebextBookmarkProvider implements BookmarkProvider {
     try {
       await browser.bookmarks.move(id, { parentId, index });
     } catch (error) {
-      await this.log.failure('Failed to move a bookmark', error, { parentId, id, index });
+      await this.log.failure('Failed to move a bookmark', error, {
+        parentId,
+        parent: await this.describeForDiagnostics(parentId),
+        id,
+        index,
+        browser: this.browserBrand,
+      });
       throw error;
     }
   }
@@ -378,7 +422,12 @@ export class WebextBookmarkProvider implements BookmarkProvider {
     try {
       await browser.bookmarks.removeTree(id);
     } catch (error) {
-      await this.log.failure('Failed to remove a bookmark tree', error, { parentId, id });
+      await this.log.failure('Failed to remove a bookmark tree', error, {
+        parentId,
+        node: await this.describeForDiagnostics(id),
+        id,
+        browser: this.browserBrand,
+      });
       throw error;
     }
   }
@@ -413,6 +462,24 @@ export class WebextBookmarkProvider implements BookmarkProvider {
     const captured = captureBookmarkMetadata(await store.getAll(), bookmarks);
     await store.setAll(captured);
     await this.log.debug('Captured bookmark metadata', { entries: Object.keys(captured).length });
+  }
+
+  /**
+   * Best-effort, privacy-safe shape of a node a write failed against — never a title or
+   * URL, just enough to tell a missing id from one that exists but is not a folder.
+   * Chromium raises the identical "Parameter 'parentId' does not specify a folder."
+   * message for both cases, so this is what turns that one string into an actual
+   * diagnosis in the log instead of a guess.
+   */
+  private async describeForDiagnostics(id: string): Promise<Record<string, unknown>> {
+    try {
+      const [node] = await browser.bookmarks.get(id);
+      return node
+        ? { found: true, isFolder: node.url === undefined, childCount: node.children?.length ?? 0 }
+        : { found: false };
+    } catch {
+      return { found: false };
+    }
   }
 
   private async getRoot(rootId: string) {

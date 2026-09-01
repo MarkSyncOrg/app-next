@@ -6,6 +6,7 @@ import {
   MemoryStorageArea,
   SEPARATOR_URL,
 } from '@marksyncorg/core';
+import { Logger, MemorySink } from '../logging/logger';
 
 /**
  * A stand-in for the WebExtension bookmarks API, faithful in the one respect this test
@@ -84,11 +85,22 @@ const bookmarks = {
     }
     return Promise.resolve([node]);
   },
+  get(id: string) {
+    const node = lookup(id);
+    if (!node) {
+      return Promise.reject(new Error("Can't find bookmark for id."));
+    }
+    return Promise.resolve([node]);
+  },
   create(details: { parentId: string; index?: number; title?: string; url?: string }) {
     writes.create += 1;
     const parent = lookup(details.parentId);
     if (!parent) {
       return Promise.reject(new Error(`No parent ${details.parentId}`));
+    }
+    // A sentinel title, used only to exercise the failure path from the public API.
+    if (details.title === '__FAIL__') {
+      return Promise.reject(new Error('boom'));
     }
     // Only what a real native node can hold: no description, no tags.
     const node: FakeNode = {
@@ -132,7 +144,7 @@ const bookmarks = {
 vi.mock('wxt/browser', () => ({ browser: { bookmarks } }));
 
 // Imported after the mock is registered, since the module binds `browser` at import time.
-const { WebextBookmarkProvider } = await import('./webext-bookmark-provider');
+const { WebextBookmarkProvider, runtimeBrowserBrand } = await import('./webext-bookmark-provider');
 
 /** A provider over a fresh sidecar, plus the sidecar itself. */
 function newProvider(withMetadata = true) {
@@ -420,6 +432,80 @@ describe('WebextBookmarkProvider.setBookmarks', () => {
 
     expect(writes).toEqual({ create: 0, removeTree: 0, move: 0, update: 0 });
     expect(nativeOther()).toEqual(before);
+  });
+});
+
+describe('WebextBookmarkProvider write failures', () => {
+  it('logs whether the parent that rejected a write exists and is a folder', async () => {
+    const sink = new MemorySink();
+    const logger = new Logger({ sinks: [sink] });
+    const metadata = new BookmarkMetadataStore(new MemoryStorageArea());
+    const provider = new WebextBookmarkProvider({ metadata, logger });
+
+    await expect(
+      provider.setBookmarks([
+        {
+          title: BookmarkContainer.Other,
+          children: [{ title: '__FAIL__', url: 'https://x.org/' }],
+        },
+      ]),
+    ).rejects.toThrow('boom');
+
+    const failure = sink.entries.find((entry) => entry.message === 'Failed to create a bookmark');
+    // The Other root ('2') is a real, empty folder, so the diagnostic should say so —
+    // this is what would have told #25 apart from a parentId that isn't a folder at all.
+    expect(failure?.context).toMatchObject({
+      parentId: '2',
+      parent: { found: true, isFolder: true, childCount: 0 },
+    });
+    // Present on every failure, whatever it resolves to under this test's plain Node
+    // environment — it is the identity Chrome and Edge don't otherwise let apart.
+    expect(typeof failure?.context?.browser).toBe('string');
+  });
+});
+
+describe('runtimeBrowserBrand', () => {
+  it('reads the brand straight from User-Agent Client Hints when the browser sets it', () => {
+    expect(
+      runtimeBrowserBrand({
+        userAgentData: {
+          brands: [
+            { brand: 'Not)A;Brand', version: '8' },
+            { brand: 'Microsoft Edge', version: '120' },
+            { brand: 'Chromium', version: '120' },
+          ],
+        },
+      }),
+    ).toBe('Microsoft Edge');
+  });
+
+  it('falls back to the user-agent string when Client Hints is unavailable', () => {
+    const edge =
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) ' +
+      'Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0';
+    expect(runtimeBrowserBrand({ userAgent: edge })).toBe('Edge');
+  });
+
+  it('tells Chrome apart from Edge and Opera, which also carry a Chrome/ token', () => {
+    const chrome =
+      'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) ' +
+      'Chrome/120.0.0.0 Safari/537.36';
+    const opera =
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) ' +
+      'Chrome/120.0.0.0 Safari/537.36 OPR/106.0.0.0';
+    expect(runtimeBrowserBrand({ userAgent: chrome })).toBe('Chrome');
+    expect(runtimeBrowserBrand({ userAgent: opera })).toBe('Opera');
+  });
+
+  it('recognises Firefox', () => {
+    const firefox =
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0';
+    expect(runtimeBrowserBrand({ userAgent: firefox })).toBe('Firefox');
+  });
+
+  it('reports unknown rather than guessing at an unrecognised or missing user agent', () => {
+    expect(runtimeBrowserBrand({ userAgent: 'Node.js/22' })).toBe('unknown');
+    expect(runtimeBrowserBrand({})).toBe('unknown');
   });
 });
 
