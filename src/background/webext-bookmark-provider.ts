@@ -335,6 +335,7 @@ export class WebextBookmarkProvider implements BookmarkProvider {
     } catch (error) {
       await this.log.failure('Failed to create a bookmark', error, {
         parentId,
+        parent: await this.describeForDiagnostics(parentId),
         kind: bookmark.url ? 'bookmark' : 'folder',
         origin: urlOrigin(bookmark.url),
       });
@@ -359,7 +360,10 @@ export class WebextBookmarkProvider implements BookmarkProvider {
     try {
       await browser.bookmarks.update(current.id, { title });
     } catch (error) {
-      await this.log.failure('Failed to retitle a bookmark', error, { id: current.id });
+      await this.log.failure('Failed to retitle a bookmark', error, {
+        id: current.id,
+        node: await this.describeForDiagnostics(current.id),
+      });
       throw error;
     }
     return true;
@@ -369,7 +373,12 @@ export class WebextBookmarkProvider implements BookmarkProvider {
     try {
       await browser.bookmarks.move(id, { parentId, index });
     } catch (error) {
-      await this.log.failure('Failed to move a bookmark', error, { parentId, id, index });
+      await this.log.failure('Failed to move a bookmark', error, {
+        parentId,
+        parent: await this.describeForDiagnostics(parentId),
+        id,
+        index,
+      });
       throw error;
     }
   }
@@ -378,7 +387,11 @@ export class WebextBookmarkProvider implements BookmarkProvider {
     try {
       await browser.bookmarks.removeTree(id);
     } catch (error) {
-      await this.log.failure('Failed to remove a bookmark tree', error, { parentId, id });
+      await this.log.failure('Failed to remove a bookmark tree', error, {
+        parentId,
+        node: await this.describeForDiagnostics(id),
+        id,
+      });
       throw error;
     }
   }
@@ -413,6 +426,24 @@ export class WebextBookmarkProvider implements BookmarkProvider {
     const captured = captureBookmarkMetadata(await store.getAll(), bookmarks);
     await store.setAll(captured);
     await this.log.debug('Captured bookmark metadata', { entries: Object.keys(captured).length });
+  }
+
+  /**
+   * Best-effort, privacy-safe shape of a node a write failed against — never a title or
+   * URL, just enough to tell a missing id from one that exists but is not a folder.
+   * Chromium raises the identical "Parameter 'parentId' does not specify a folder."
+   * message for both cases, so this is what turns that one string into an actual
+   * diagnosis in the log instead of a guess.
+   */
+  private async describeForDiagnostics(id: string): Promise<Record<string, unknown>> {
+    try {
+      const [node] = await browser.bookmarks.get(id);
+      return node
+        ? { found: true, isFolder: node.url === undefined, childCount: node.children?.length ?? 0 }
+        : { found: false };
+    } catch {
+      return { found: false };
+    }
   }
 
   private async getRoot(rootId: string) {

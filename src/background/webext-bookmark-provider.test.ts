@@ -6,6 +6,7 @@ import {
   MemoryStorageArea,
   SEPARATOR_URL,
 } from '@marksyncorg/core';
+import { Logger, MemorySink } from '../logging/logger';
 
 /**
  * A stand-in for the WebExtension bookmarks API, faithful in the one respect this test
@@ -84,11 +85,22 @@ const bookmarks = {
     }
     return Promise.resolve([node]);
   },
+  get(id: string) {
+    const node = lookup(id);
+    if (!node) {
+      return Promise.reject(new Error("Can't find bookmark for id."));
+    }
+    return Promise.resolve([node]);
+  },
   create(details: { parentId: string; index?: number; title?: string; url?: string }) {
     writes.create += 1;
     const parent = lookup(details.parentId);
     if (!parent) {
       return Promise.reject(new Error(`No parent ${details.parentId}`));
+    }
+    // A sentinel title, used only to exercise the failure path from the public API.
+    if (details.title === '__FAIL__') {
+      return Promise.reject(new Error('boom'));
     }
     // Only what a real native node can hold: no description, no tags.
     const node: FakeNode = {
@@ -420,6 +432,32 @@ describe('WebextBookmarkProvider.setBookmarks', () => {
 
     expect(writes).toEqual({ create: 0, removeTree: 0, move: 0, update: 0 });
     expect(nativeOther()).toEqual(before);
+  });
+});
+
+describe('WebextBookmarkProvider write failures', () => {
+  it('logs whether the parent that rejected a write exists and is a folder', async () => {
+    const sink = new MemorySink();
+    const logger = new Logger({ sinks: [sink] });
+    const metadata = new BookmarkMetadataStore(new MemoryStorageArea());
+    const provider = new WebextBookmarkProvider({ metadata, logger });
+
+    await expect(
+      provider.setBookmarks([
+        {
+          title: BookmarkContainer.Other,
+          children: [{ title: '__FAIL__', url: 'https://x.org/' }],
+        },
+      ]),
+    ).rejects.toThrow('boom');
+
+    const failure = sink.entries.find((entry) => entry.message === 'Failed to create a bookmark');
+    // The Other root ('2') is a real, empty folder, so the diagnostic should say so —
+    // this is what would have told #25 apart from a parentId that isn't a folder at all.
+    expect(failure?.context).toMatchObject({
+      parentId: '2',
+      parent: { found: true, isFolder: true, childCount: 0 },
+    });
   });
 });
 
