@@ -144,7 +144,7 @@ const bookmarks = {
 vi.mock('wxt/browser', () => ({ browser: { bookmarks } }));
 
 // Imported after the mock is registered, since the module binds `browser` at import time.
-const { WebextBookmarkProvider } = await import('./webext-bookmark-provider');
+const { WebextBookmarkProvider, runtimeBrowserBrand } = await import('./webext-bookmark-provider');
 
 /** A provider over a fresh sidecar, plus the sidecar itself. */
 function newProvider(withMetadata = true) {
@@ -458,6 +458,54 @@ describe('WebextBookmarkProvider write failures', () => {
       parentId: '2',
       parent: { found: true, isFolder: true, childCount: 0 },
     });
+    // Present on every failure, whatever it resolves to under this test's plain Node
+    // environment — it is the identity Chrome and Edge don't otherwise let apart.
+    expect(typeof failure?.context?.browser).toBe('string');
+  });
+});
+
+describe('runtimeBrowserBrand', () => {
+  it('reads the brand straight from User-Agent Client Hints when the browser sets it', () => {
+    expect(
+      runtimeBrowserBrand({
+        userAgentData: {
+          brands: [
+            { brand: 'Not)A;Brand', version: '8' },
+            { brand: 'Microsoft Edge', version: '120' },
+            { brand: 'Chromium', version: '120' },
+          ],
+        },
+      }),
+    ).toBe('Microsoft Edge');
+  });
+
+  it('falls back to the user-agent string when Client Hints is unavailable', () => {
+    const edge =
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) ' +
+      'Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0';
+    expect(runtimeBrowserBrand({ userAgent: edge })).toBe('Edge');
+  });
+
+  it('tells Chrome apart from Edge and Opera, which also carry a Chrome/ token', () => {
+    const chrome =
+      'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) ' +
+      'Chrome/120.0.0.0 Safari/537.36';
+    const opera =
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) ' +
+      'Chrome/120.0.0.0 Safari/537.36 OPR/106.0.0.0';
+    expect(runtimeBrowserBrand({ userAgent: chrome })).toBe('Chrome');
+    expect(runtimeBrowserBrand({ userAgent: opera })).toBe('Opera');
+  });
+
+  it('recognises Firefox', () => {
+    const firefox =
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0';
+    expect(runtimeBrowserBrand({ userAgent: firefox })).toBe('Firefox');
+  });
+
+  it('reports unknown rather than guessing at an unrecognised or missing user agent', () => {
+    expect(runtimeBrowserBrand({ userAgent: 'Node.js/22' })).toBe('unknown');
+    expect(runtimeBrowserBrand({})).toBe('unknown');
   });
 });
 

@@ -67,6 +67,35 @@ function countBookmarks(bookmarks: Bookmark[]): number {
   );
 }
 
+/** The parts of `navigator` browser identification reads, kept narrow so tests can fake it. */
+interface BrandSource {
+  userAgentData?: { brands?: readonly { brand: string; version?: string }[] };
+  userAgent?: string;
+}
+
+/**
+ * The real browser family, distinct from `import.meta.env.BROWSER`'s build target:
+ * Chromium ships the exact same build to Chrome, Edge, Brave, Opera and others, so that
+ * constant alone cannot tell a bug report's browser apart from the rest — which is
+ * exactly the dimension issue #25 turned on (works in Chrome, fails in Edge). Order
+ * matters below: Edge's and Opera's user-agent strings both also contain "Chrome/".
+ */
+export function runtimeBrowserBrand(nav: BrandSource | undefined = globalThis.navigator): string {
+  const brand = nav?.userAgentData?.brands?.find(
+    (entry) => !/not.*brand/i.test(entry.brand),
+  )?.brand;
+  if (brand) {
+    return brand;
+  }
+  const ua = nav?.userAgent ?? '';
+  if (/\bEdg\//.test(ua)) return 'Edge';
+  if (/\bOPR\//.test(ua)) return 'Opera';
+  if (/\bFirefox\//.test(ua)) return 'Firefox';
+  if (/\bChrome\//.test(ua)) return 'Chrome';
+  if (/\bSafari\//.test(ua)) return 'Safari';
+  return 'unknown';
+}
+
 /**
  * BookmarkProvider backed by the WebExtension bookmarks API. This is the single
  * browser-specific seam of the sync engine. `setBookmarks` reconciles each container
@@ -97,6 +126,9 @@ export class WebextBookmarkProvider implements BookmarkProvider {
   readonly holdsSeparators = import.meta.env.BROWSER === 'firefox';
 
   private readonly log: Logger;
+
+  /** Computed once: it does not change over the provider's lifetime. */
+  private readonly browserBrand = runtimeBrowserBrand();
 
   constructor(private readonly options: WebextBookmarkProviderOptions = {}) {
     this.log = options.logger ?? new Logger();
@@ -338,6 +370,7 @@ export class WebextBookmarkProvider implements BookmarkProvider {
         parent: await this.describeForDiagnostics(parentId),
         kind: bookmark.url ? 'bookmark' : 'folder',
         origin: urlOrigin(bookmark.url),
+        browser: this.browserBrand,
       });
       throw error;
     }
@@ -363,6 +396,7 @@ export class WebextBookmarkProvider implements BookmarkProvider {
       await this.log.failure('Failed to retitle a bookmark', error, {
         id: current.id,
         node: await this.describeForDiagnostics(current.id),
+        browser: this.browserBrand,
       });
       throw error;
     }
@@ -378,6 +412,7 @@ export class WebextBookmarkProvider implements BookmarkProvider {
         parent: await this.describeForDiagnostics(parentId),
         id,
         index,
+        browser: this.browserBrand,
       });
       throw error;
     }
@@ -391,6 +426,7 @@ export class WebextBookmarkProvider implements BookmarkProvider {
         parentId,
         node: await this.describeForDiagnostics(id),
         id,
+        browser: this.browserBrand,
       });
       throw error;
     }
