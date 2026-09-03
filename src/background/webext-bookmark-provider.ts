@@ -18,8 +18,12 @@ interface ContainerRoot {
   rootId: string;
 }
 
-/** A node of the browser's own bookmark tree. */
-type NativeNode = Browser.bookmarks.BookmarkTreeNode;
+/**
+ * A node of the browser's own bookmark tree. `folderType` is real (present on Chromium's
+ * top-level permanent folders since around Chrome 130) but absent from the shared type,
+ * the same gap `type: 'separator'` below works around.
+ */
+type NativeNode = Browser.bookmarks.BookmarkTreeNode & { folderType?: string };
 
 /** What applying a tree actually changed, for the log. */
 interface BookmarkChange {
@@ -40,23 +44,52 @@ function addChange(total: BookmarkChange, part: BookmarkChange): void {
   total.updated += part.updated;
 }
 
+const FIREFOX_ROOTS: ContainerRoot[] = [
+  { container: BookmarkContainer.Toolbar, rootId: 'toolbar_____' },
+  { container: BookmarkContainer.Menu, rootId: 'menu________' },
+  { container: BookmarkContainer.Other, rootId: 'unfiled_____' },
+];
+
 /**
- * Maps xBrowserSync containers to the browser's native bookmark root IDs. Chromium
- * exposes the bookmarks bar ('1') and other bookmarks ('2'); Firefox uses named roots
- * and additionally has a bookmarks menu.
+ * Where Chromium is assumed to put the bookmarks bar and other-bookmarks folders when
+ * they cannot be found any other way — true of a fresh profile, but not a guarantee. Used
+ * only as the last resort in {@link getContainerRoots}.
  */
-function getContainerRoots(): ContainerRoot[] {
+const LEGACY_CHROMIUM_ROOTS: ContainerRoot[] = [
+  { container: BookmarkContainer.Toolbar, rootId: '1' },
+  { container: BookmarkContainer.Other, rootId: '2' },
+];
+
+/**
+ * Maps xBrowserSync containers to the browser's native bookmark root ids.
+ *
+ * Firefox exposes stable, named roots. Chromium does not: '1' (bar) and '2' (other) are
+ * only where those folders happen to sit in a fresh profile — issue #25 was a real Edge
+ * profile where they did not: id '2' existed, but as an ordinary bookmark rather than the
+ * "Other Bookmarks" folder, so every write aimed at it failed with "parentId does not
+ * specify a folder." `folderType` names each top-level permanent folder's role regardless
+ * of its id, so the roots are read fresh from `getChildren('0')` on every call rather than
+ * assumed; the historical ids are used only when that read fails or neither role is
+ * tagged (an older Chromium without `folderType`).
+ */
+async function getContainerRoots(): Promise<ContainerRoot[]> {
   if (import.meta.env.BROWSER === 'firefox') {
-    return [
-      { container: BookmarkContainer.Toolbar, rootId: 'toolbar_____' },
-      { container: BookmarkContainer.Menu, rootId: 'menu________' },
-      { container: BookmarkContainer.Other, rootId: 'unfiled_____' },
-    ];
+    return FIREFOX_ROOTS;
   }
-  return [
-    { container: BookmarkContainer.Toolbar, rootId: '1' },
-    { container: BookmarkContainer.Other, rootId: '2' },
-  ];
+  try {
+    const children = (await browser.bookmarks.getChildren('0')) as NativeNode[];
+    const bar = children.find((node) => node.folderType === 'bookmarks-bar');
+    const other = children.find((node) => node.folderType === 'other');
+    if (bar && other) {
+      return [
+        { container: BookmarkContainer.Toolbar, rootId: bar.id },
+        { container: BookmarkContainer.Other, rootId: other.id },
+      ];
+    }
+  } catch {
+    // getChildren('0') itself failed; fall through to the historical ids below.
+  }
+  return LEGACY_CHROMIUM_ROOTS;
 }
 
 /** Total number of nodes in a bookmark tree, used for log counts. */
@@ -81,9 +114,12 @@ interface BrandSource {
  * matters below: Edge's and Opera's user-agent strings both also contain "Chrome/".
  */
 export function runtimeBrowserBrand(nav: BrandSource | undefined = globalThis.navigator): string {
-  const brand = nav?.userAgentData?.brands?.find(
-    (entry) => !/not.*brand/i.test(entry.brand),
-  )?.brand;
+  const brands = nav?.userAgentData?.brands?.filter((entry) => !/not.*brand/i.test(entry.brand));
+  // Every Chromium-based browser also lists the generic "Chromium" brand alongside its
+  // own, in no guaranteed order — a real report (issue #25) had it listed first, which
+  // read as "Chromium" instead of "Microsoft Edge". Prefer the specific brand; fall back
+  // to "Chromium" only when it is genuinely the only one present.
+  const brand = brands?.find((entry) => entry.brand !== 'Chromium')?.brand ?? brands?.[0]?.brand;
   if (brand) {
     return brand;
   }
@@ -136,7 +172,7 @@ export class WebextBookmarkProvider implements BookmarkProvider {
 
   /** Container roots to sync, honouring the toolbar setting. */
   private async includedRoots(): Promise<ContainerRoot[]> {
-    const roots = getContainerRoots();
+    const roots = await getContainerRoots();
     if (this.options.isToolbarEnabled && !(await this.options.isToolbarEnabled())) {
       await this.log.debug('Excluding the toolbar container (setting is off)');
       return roots.filter((root) => root.container !== BookmarkContainer.Toolbar);
