@@ -18,10 +18,14 @@ interface FakeNode {
   title?: string;
   url?: string;
   children?: FakeNode[];
+  /** Chromium-only tag naming a top-level permanent folder's role; see `getChildren('0')`. */
+  folderType?: string;
 }
 
 let nextId = 100;
 let roots: Record<string, FakeNode>;
+/** Set by a test to make `getChildren('0')` fail, exercising the discovery fallback. */
+let failRootDiscovery = false;
 
 function findNode(node: FakeNode, id: string): FakeNode | undefined {
   if (node.id === id) {
@@ -91,6 +95,19 @@ const bookmarks = {
       return Promise.reject(new Error("Can't find bookmark for id."));
     }
     return Promise.resolve([node]);
+  },
+  getChildren(id: string) {
+    if (id === '0') {
+      if (failRootDiscovery) {
+        return Promise.reject(new Error('No permission to read the root'));
+      }
+      return Promise.resolve(Object.values(roots));
+    }
+    const node = lookup(id);
+    if (!node) {
+      return Promise.reject(new Error(`No node ${id}`));
+    }
+    return Promise.resolve(node.children ?? []);
   },
   create(details: { parentId: string; index?: number; title?: string; url?: string }) {
     writes.create += 1;
@@ -173,11 +190,14 @@ function described(description?: string, tags?: string[]): Bookmark[] {
 }
 
 beforeEach(() => {
-  // import.meta.env.BROWSER is unset under vitest, so the Chromium roots apply.
+  // import.meta.env.BROWSER is unset under vitest, so the Chromium roots apply. Tagged
+  // with the folderType real Chromium reports, so discovery resolves to the same '1'/'2'
+  // every existing test already assumes.
   roots = {
-    '1': { id: '1', title: 'Bookmarks bar', children: [] },
-    '2': { id: '2', title: 'Other bookmarks', children: [] },
+    '1': { id: '1', title: 'Bookmarks bar', folderType: 'bookmarks-bar', children: [] },
+    '2': { id: '2', title: 'Other bookmarks', folderType: 'other', children: [] },
   };
+  failRootDiscovery = false;
   Object.assign(writes, { create: 0, removeTree: 0, move: 0, update: 0 });
 });
 
@@ -432,6 +452,51 @@ describe('WebextBookmarkProvider.setBookmarks', () => {
 
     expect(writes).toEqual({ create: 0, removeTree: 0, move: 0, update: 0 });
     expect(nativeOther()).toEqual(before);
+  });
+});
+
+describe('WebextBookmarkProvider container discovery', () => {
+  it('finds Other Bookmarks by folderType rather than assuming id "2" (issue #25)', async () => {
+    // The reported profile: id '2' exists but is an ordinary bookmark, not the Other
+    // Bookmarks folder — real Chromium rejects any create() aimed at it with "Parameter
+    // 'parentId' does not specify a folder.", which is exactly what was reported. The
+    // real Other Bookmarks folder sits at an unrelated id, tagged with folderType.
+    roots = {
+      '1': { id: '1', title: 'Bookmarks bar', folderType: 'bookmarks-bar', children: [] },
+      '2': { id: '2', title: 'Some bookmark', url: 'https://unrelated.example/' },
+      '7': { id: '7', title: 'Other Favorites', folderType: 'other', children: [] },
+    };
+    const { provider } = newProvider();
+
+    await provider.setBookmarks(other('A'));
+
+    // The bookmark landed in the real folder, and the unrelated node at '2' was never
+    // touched (still has no `children`, i.e. still not a folder).
+    expect(roots['7']!.children!.map((child) => child.title)).toEqual(['A']);
+    expect(roots['2']).not.toHaveProperty('children');
+  });
+
+  it('falls back to the historical bar/other ids when no child is tagged with folderType', async () => {
+    // An older Chromium without folderType support: the discovery read succeeds but
+    // neither role is tagged, so the provider must fall back rather than sync nothing.
+    roots = {
+      '1': { id: '1', title: 'Bookmarks bar', children: [] },
+      '2': { id: '2', title: 'Other bookmarks', children: [] },
+    };
+    const { provider } = newProvider();
+
+    await provider.setBookmarks(other('A'));
+
+    expect(roots['2']!.children!.map((child) => child.title)).toEqual(['A']);
+  });
+
+  it('falls back to the historical bar/other ids when getChildren("0") itself fails', async () => {
+    failRootDiscovery = true;
+    const { provider } = newProvider();
+
+    await provider.setBookmarks(other('A'));
+
+    expect(roots['2']!.children!.map((child) => child.title)).toEqual(['A']);
   });
 });
 
