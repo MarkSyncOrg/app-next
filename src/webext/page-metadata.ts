@@ -78,8 +78,7 @@ async function inject(tabId: number): Promise<PageMetadata | undefined> {
     return result?.result;
   }
   const legacy = (browser as { tabs: { executeScript?: unknown } }).tabs.executeScript as
-    | ((tabId: number, details: { code: string }) => Promise<unknown[]>)
-    | undefined;
+    ((tabId: number, details: { code: string }) => Promise<unknown[]>) | undefined;
   if (!legacy) {
     return undefined;
   }
