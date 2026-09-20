@@ -44,10 +44,11 @@ patchedDependencies:
 # so CI, nightly and release alike re-resolve the tree from the registry instead of
 # building what was reviewed, and the release job is the one that builds what ships to
 # the stores. Moving them back to `--frozen-lockfile` is now a safe edit, with one
-# ordering constraint: it should land after Dependabot can actually update this lockfile,
-# which needs the DEPENDABOT_PACKAGES_TOKEN secret named in .github/dependabot.yml.
-# Before then, a Dependabot pull request that touches package.json without the lockfile
-# would fail CI on the mismatch rather than on anything real.
+# ordering constraint: it should land only once Dependabot has actually opened an npm
+# pull request here and updated this lockfile in it. Until that is observed, a Dependabot
+# pull request touching package.json without the lockfile would fail CI on the mismatch
+# rather than on anything real. No secret is involved any more; see the note in
+# .github/dependabot.yml for why the registry block there is deliberately absent.
 
 # Dependency lifecycle scripts pnpm may run: none. pnpm blocks them by default, and the
 # two entries that used to sit here are both moot. esbuild needed its install script to

@@ -1,32 +1,34 @@
 version: 2
 
-# Dependabot does not use GITHUB_TOKEN for private registries, and it never sees the
-# `permissions:` block in a workflow: that block governs the token handed to a workflow
-# run, which is a different thing from the credential Dependabot uses when it resolves a
-# dependency tree of its own. So the workflows already having `packages: read` (they do)
-# does nothing for the update runs here. A private registry has to be declared below and
-# handed its own credential.
+# No `registries:` block, and it is worth saying why, because the obvious reading is that
+# one is missing.
 #
-# REQUIRED SETUP, once, by someone with admin on this repo: create a Dependabot secret
-# named DEPENDABOT_PACKAGES_TOKEN (Settings > Secrets and variables > Dependabot > New
-# repository secret) holding a token with the `read:packages` scope. Until that secret
-# exists the npm update run below reports a missing secret and opens no pull requests.
+# npm.pkg.github.com requires authentication even for a public package, unlike ghcr.io
+# which serves public images anonymously. So @marksyncorg/core does need a credential.
+# But since the 2026-06-23 change (rolled back, then re-enabled 2026-09-08 with automatic
+# credentials as a fallback rather than an override), Dependabot's own GITHUB_TOKEN can
+# request `packages: read` and it sends that token to *.pkg.github.com, reusing whatever
+# grant the package already gives this repo under "Manage Actions access". That grant is
+# in place, so there is nothing left for a PAT to do here.
 #
-# This is what the npm runs were failing on: they cannot resolve @marksyncorg/core from
-# npm.pkg.github.com, so the pnpm lockfile went three rounds without an update while the
-# github-actions runs, which need no registry, kept working.
-registries:
-  github-packages:
-    type: npm-registry
-    url: https://npm.pkg.github.com
-    token: ${{secrets.DEPENDABOT_PACKAGES_TOKEN}}
-
+# This deliberately replaces a block naming a DEPENDABOT_PACKAGES_TOKEN secret. Fine
+# grained tokens do not work for GitHub Packages (the docs describe classic tokens only),
+# so that block would have meant a classic, account-wide PAT for a job that no longer
+# needs one. A registry entry whose secret does not exist also fails the run outright, so
+# the empty state is the working one.
+#
+# If npm updates stop appearing, check in this order before reaching for a token:
+#   1. the package still grants this repo Read under "Manage Actions access";
+#   2. the update log, for public packages being resolved against npm.pkg.github.com
+#      instead of registry.npmjs.org. That was the bug behind the June rollback
+#      (dependabot-core#15415), it hit pnpm repos in orgs that publish to GitHub
+#      Packages, and it shows up as a stale version for something ordinary like
+#      @types/node. The `@marksyncorg:registry` line in .npmrc scopes us narrowly, which
+#      is the right shape, but the bug was about the base registry, not the scoped one.
 updates:
   # The "npm" ecosystem also drives pnpm lockfiles.
   - package-ecosystem: npm
     directory: /
-    registries:
-      - github-packages
     schedule:
       interval: weekly
     open-pull-requests-limit: 10
@@ -37,8 +39,6 @@ updates:
     groups:
       dev-dependencies:
         dependency-type: development
-  # No registries here on purpose: action versions come from GitHub itself, so this run
-  # needs no credential and must keep working whether or not the secret above exists.
   - package-ecosystem: github-actions
     directory: /
     schedule:
