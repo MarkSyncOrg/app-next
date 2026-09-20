@@ -39,30 +39,40 @@ overrides:
 patchedDependencies:
   lzutf8@0.6.3: patches/lzutf8@0.6.3.patch
 
-# KNOWN GAP — the lockfile is not a supply-chain control here today. It carries no
-# `patchedDependencies` section, so it disagrees with the block above and
-# `pnpm install --frozen-lockfile` refuses outright
-# (ERR_PNPM_LOCKFILE_CONFIG_MISMATCH). Every workflow therefore installs with
-# `--no-frozen-lockfile` — CI, nightly and release alike — which means each run
-# re-resolves the tree from the registry instead of building what was reviewed. The
-# `minimumReleaseAge` cooldown below narrows that window but does not close it, and the
-# release job builds what ships to the stores. Fixing it is one `pnpm install` by someone
-# with a GitHub Packages token (the lockfile then records the patch), followed by moving
-# the seven workflow installs back to `--frozen-lockfile`.
+# HALF-CLOSED GAP. The lockfile used to carry no `patchedDependencies` section, so it
+# disagreed with the block above and `pnpm install --frozen-lockfile` refused outright
+# with ERR_PNPM_LOCKFILE_CONFIG_MISMATCH. That half is done: the lockfile was regenerated
+# with a GitHub Packages token, it records the patch, and a frozen install now succeeds
+# from a clean node_modules.
+#
+# The other half is not. All seven workflow installs still pass `--no-frozen-lockfile`,
+# so CI, nightly and release alike re-resolve the tree from the registry instead of
+# building what was reviewed, and the release job is the one that builds what ships to
+# the stores. Moving them back to `--frozen-lockfile` is now a safe edit, with one
+# ordering constraint: it should land after Dependabot can actually update this lockfile,
+# which needs the DEPENDABOT_PACKAGES_TOKEN secret named in .github/dependabot.yml.
+# Before then, a Dependabot pull request that touches package.json without the lockfile
+# would fail CI on the mismatch rather than on anything real.
 
 # pnpm blocks dependency lifecycle scripts by default. esbuild needs its install script
 # to fetch the platform binary used by vite/wxt; nothing else needs to build.
+# spawn-sync is listed as an explicit `false` rather than left out: it is a transitive of
+# the firefox runner, and saying no in the file is a decision on the record instead of an
+# omission someone has to re-derive.
 allowBuilds:
   esbuild: true
   spawn-sync: false
 
 # Supply-chain cooldown: never install a package version published less than 4 days ago
 # (4 * 24 * 60 = 5760 minutes), giving freshly-published (possibly compromised) releases
-# time to be caught before they enter the tree. It gates new resolutions — which, until
-# the gap noted above is closed, is what every CI, nightly and release install performs.
-# The line this replaces said frozen-lockfile installs in CI were unaffected by it; there
-# are none, so the cooldown is currently the only thing standing between a fresh upstream
-# release and a build that ships.
+# time to be caught before they enter the tree. It gates new resolutions, which is what
+# every CI, nightly and release install still performs while those installs pass
+# `--no-frozen-lockfile` (see the gap note above). So the cooldown remains, for now, the
+# only thing standing between a fresh upstream release and a build that ships.
+#
+# It also holds back versions this repo would otherwise take: today eslint 10.11.0 and
+# prettier 3.9.8 are both inside the window, which is why the manifest names 10.10.0 and
+# 3.9.6. That is the cooldown working, not a stale pin.
 minimumReleaseAge: 5760
 
 # Exempt our own first-party package from the cooldown: it is published by us to a

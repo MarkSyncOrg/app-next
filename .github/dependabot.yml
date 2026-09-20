@@ -1,8 +1,32 @@
 version: 2
+
+# Dependabot does not use GITHUB_TOKEN for private registries, and it never sees the
+# `permissions:` block in a workflow: that block governs the token handed to a workflow
+# run, which is a different thing from the credential Dependabot uses when it resolves a
+# dependency tree of its own. So the workflows already having `packages: read` (they do)
+# does nothing for the update runs here. A private registry has to be declared below and
+# handed its own credential.
+#
+# REQUIRED SETUP, once, by someone with admin on this repo: create a Dependabot secret
+# named DEPENDABOT_PACKAGES_TOKEN (Settings > Secrets and variables > Dependabot > New
+# repository secret) holding a token with the `read:packages` scope. Until that secret
+# exists the npm update run below reports a missing secret and opens no pull requests.
+#
+# This is what the npm runs were failing on: they cannot resolve @marksyncorg/core from
+# npm.pkg.github.com, so the pnpm lockfile went three rounds without an update while the
+# github-actions runs, which need no registry, kept working.
+registries:
+  github-packages:
+    type: npm-registry
+    url: https://npm.pkg.github.com
+    token: ${{secrets.DEPENDABOT_PACKAGES_TOKEN}}
+
 updates:
   # The "npm" ecosystem also drives pnpm lockfiles.
   - package-ecosystem: npm
     directory: /
+    registries:
+      - github-packages
     schedule:
       interval: weekly
     open-pull-requests-limit: 10
@@ -13,6 +37,8 @@ updates:
     groups:
       dev-dependencies:
         dependency-type: development
+  # No registries here on purpose: action versions come from GitHub itself, so this run
+  # needs no credential and must keep working whether or not the secret above exists.
   - package-ecosystem: github-actions
     directory: /
     schedule:
