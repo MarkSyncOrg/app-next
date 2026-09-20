@@ -8,10 +8,10 @@
 # (GHSA-g7r4-m6w7-qqqr) is a low-severity, dev-server-on-Windows file read — below the
 # `high` audit gate and not exercised by our build.
 overrides:
-  js-yaml: ^4.3.1
+  js-yaml: ^4.3.2
   shell-quote: ^1.9.0
   postcss: ^8.5.23
-  adm-zip: ^0.6.0
+  adm-zip: ^0.6.1
   # brace-expansion ships two vulnerable major lines in the tree; patch each.
   brace-expansion@1: 1.1.18
   brace-expansion@5: 5.0.9
@@ -19,12 +19,20 @@ overrides:
   tmp: ^0.2.7
   uuid: ^11.1.1
 
-# A pin is only as current as the advisory it was written against, and several of these
-# went stale as later advisories raised the floor on the same package: js-yaml (4.3.0 →
-# 4.3.1, !!omap), postcss (8.5.18 → 8.5.23, the incomplete fix for GHSA-6g55-p6wh-862q)
-# and both brace-expansion lines (unbounded intermediate arrays, on top of the expansion
-# -length DoS they were pinned for). nanoid is new here. Re-run `pnpm audit` when
-# touching this block rather than trusting the numbers to still be the fixed ones.
+# A pin is only as current as the advisory it was written against, and these go stale
+# every time a later advisory raises the floor on the same package. The last round moved
+# postcss (8.5.18 → 8.5.23, the incomplete fix for GHSA-6g55-p6wh-862q), both
+# brace-expansion lines (unbounded intermediate arrays, on top of the expansion-length
+# DoS they were pinned for) and added nanoid. This round moves two more:
+#   js-yaml 4.3.1 → 4.3.2   GHSA-2883-xcg3-v3hh, maxTotalMergeKeys does not bound CPU
+#                           use for empty merge sources (high). Stays inside 4.x: 5.x
+#                           drops the `types.merge` export the toolchain reads.
+#   adm-zip ^0.6.0 → ^0.6.1 GHSA-7q85-xj36-vmfc, uncontrolled memory allocation from the
+#                           declared uncompressed size (high), and GHSA-vwc7-r8mq-g2x9,
+#                           extraction following destination symlinks (moderate). Reaches
+#                           the tree through wxt > web-ext-run > firefox-profile.
+# Re-run `pnpm audit` when touching this block rather than trusting the numbers to still
+# be the fixed ones.
 
 # lzutf8 (transitive, via @marksyncorg/core) writes its optional debug output with
 # `document.body.innerHTML += …`. The branch is dead here — nothing ever asks it to log
