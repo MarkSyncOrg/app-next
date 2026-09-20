@@ -80,8 +80,7 @@ export interface SyncResultData {
 }
 
 export type SyncResponse<T> =
-  | { ok: true; data: T }
-  | { ok: false; error: { name: string; message: string } };
+  { ok: true; data: T } | { ok: false; error: { name: string; message: string } };
 
 const REQUEST_TYPES: readonly SyncRequestType[] = [
   'getStatus',
