@@ -18,8 +18,8 @@ importers:
   .:
     dependencies:
       '@marksyncorg/core':
-        specifier: 0.5.0
-        version: 0.5.0
+        specifier: 0.6.1
+        version: 0.6.1
     devDependencies:
       '@eslint/js':
         specifier: 10.0.1
@@ -361,8 +361,8 @@ packages:
   '@keyv/serialize@1.1.1':
     resolution: {integrity: sha512-dXn3FZhPv0US+7dtJsIi2R+c7qWYiReoEh5zUntWCf4oSpMNib8FDhSoed6m3QyZdx5hK7iLFkYk3rNxwt8vTA==}
 
-  '@marksyncorg/core@0.5.0':
-    resolution: {integrity: sha512-lVyalmMIxfqxqjvbd3v1vckYWdNeo6yMCBmx8Vm7TTexQtjbT8Y1+Pc6sTISDtPWBXqZGVH594+ixZOZLNealg==, tarball: https://npm.pkg.github.com/download/@marksyncorg/core/0.5.0/78e3a6c9f449748daed49b78406159f5fd3de33b}
+  '@marksyncorg/core@0.6.1':
+    resolution: {integrity: sha512-qhX7pNy4QR2zVL4upEubpfu+aYx6DslNyQsNEeaBHreyChr3H8cS5aUCPwYXdws5QZnCrgWidHoHR6+Ux/OdIA==, tarball: https://npm.pkg.github.com/download/@marksyncorg/core/0.6.1/09217b5fc2018da7774a0604238bc3dae63c2ddd}
     engines: {node: '>=22', pnpm: '>=11'}
 
   '@oxc-project/types@0.149.0':
@@ -2711,7 +2711,7 @@ snapshots:
 
   '@keyv/serialize@1.1.1': {}
 
-  '@marksyncorg/core@0.5.0':
+  '@marksyncorg/core@0.6.1':
     dependencies:
       lzutf8: 0.6.3(patch_hash=347c9ab36a95960c609598314a36929e2e455b7522325688195bf28c27cc22c5)
       openapi-fetch: 0.17.0
