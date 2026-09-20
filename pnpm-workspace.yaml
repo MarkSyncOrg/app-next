@@ -1,33 +1,28 @@
 # pnpm settings (pnpm 11 reads project config from here, not the package.json "pnpm" field).
 
-# Patched floors for vulnerable transitive dev dependencies. Every one of these reaches
-# the tree through the same chain, wxt > web-ext-run > ..., which is the firefox runner:
-# nothing here ships in the extension, and `pnpm audit --prod` is clean without any of it.
+# No `overrides` block, and that is a result rather than an oversight. Every pin this
+# file used to carry is gone, checked one at a time by emptying the block and re-running
+# `pnpm audit`:
 #
-# These are floors (`>=`), not pins, so each install takes the newest release rather than
-# the one that happened to be current when the advisory was read. That is deliberate: the
-# pinned form of this block went stale three rounds running, every time a later advisory
-# raised the floor on a package that was already listed. A floor cannot go stale that way.
-# The version named in each comment is the one the advisory requires, not a ceiling.
+#   js-yaml, postcss, nanoid, brace-expansion (x2) were transitive dependencies of an
+#   older eslint and vitest. On eslint 10 / vitest 5 the tree resolves them already
+#   patched.
 #
-# What is NOT here matters as much. js-yaml, postcss, nanoid and both brace-expansion
-# lines used to be pinned here and are gone: they were transitive dependencies of an
-# older eslint and vitest, and on eslint 10 / vitest 5 the tree resolves them patched on
-# its own. Re-run `pnpm audit` with this block emptied before adding a pin, rather than
-# inheriting one.
+#   shell-quote, tmp, uuid, adm-zip all reached the tree through wxt > web-ext-run, the
+#   firefox runner. wxt 0.21 does not depend on web-ext-run at all, so that whole subtree
+#   left, and with it a critical shell-quote advisory and three more.
 #
-# esbuild is deliberately absent, and re-tested rather than assumed: with `esbuild:
-# ^0.28.1` the install succeeds and `pnpm build` then fails with 160 "Transforming
-# destructuring to the configured target environment is not supported yet" errors against
-# the manifest's browser targets. esbuild is a direct dependency of wxt, so no amount of
-# deduplicating vite reaches it. Its one advisory (GHSA-g7r4-m6w7-qqqr) is a low-severity
-# dev-server-on-Windows file read, below the `high` audit gate and not exercised by the
-# build.
-overrides:
-  shell-quote: '>=1.8.5' # GHSA-g4vp-m682-qqmp (critical, newline escaping) + a quadratic DoS
-  tmp: '>=0.2.6' # path traversal via an unsanitized prefix
-  uuid: '>=11.1.1' # missing buffer bounds check in v3/v5/v6
-  adm-zip: '>=0.6.1' # GHSA-7q85-xj36-vmfc (memory allocation) + GHSA-vwc7-r8mq-g2x9 (symlinks)
+#   esbuild was never a real dependency here: vite 8 declares it as an OPTIONAL peer
+#   (`^0.27.0 || ^0.28.0`), and with autoInstallPeers it was being pulled in and then
+#   flagged by GHSA-g7r4-m6w7-qqqr. On a full re-resolve under wxt 0.21 it is not
+#   installed at all. Do not "fix" it with an override: an override rewrites the peer
+#   range, and a range vite does not declare makes pnpm drop the optional peer rather
+#   than upgrade it, which looks like a fix in `pnpm audit` and is really just a package
+#   leaving the tree. It costs nothing here, confirmed by hashing the built output with
+#   esbuild present and absent: identical, file for file.
+#
+# So: before adding a pin, empty this space and run `pnpm audit`. A dependency bump that
+# removes the vulnerable subtree beats a pin that has to be re-read every round.
 
 # lzutf8 (transitive, via @marksyncorg/core) writes its optional debug output with
 # `document.body.innerHTML += …`. The branch is dead here — nothing ever asks it to log
@@ -54,14 +49,13 @@ patchedDependencies:
 # Before then, a Dependabot pull request that touches package.json without the lockfile
 # would fail CI on the mismatch rather than on anything real.
 
-# pnpm blocks dependency lifecycle scripts by default. esbuild needs its install script
-# to fetch the platform binary used by vite/wxt; nothing else needs to build.
-# spawn-sync is listed as an explicit `false` rather than left out: it is a transitive of
-# the firefox runner, and saying no in the file is a decision on the record instead of an
-# omission someone has to re-derive.
-allowBuilds:
-  esbuild: true
-  spawn-sync: false
+# Dependency lifecycle scripts pnpm may run: none. pnpm blocks them by default, and the
+# two entries that used to sit here are both moot. esbuild needed its install script to
+# fetch a platform binary, and it is no longer in the tree (see the note at the top);
+# spawn-sync came through web-ext-run, which wxt 0.21 dropped. An empty list is the safe
+# default: a dependency bump that puts a package with an install script back in the tree
+# is blocked and fails loudly instead of running it unreviewed.
+allowBuilds: {}
 
 # Supply-chain cooldown: never install a package version published less than 4 days ago
 # (4 * 24 * 60 = 5760 minutes), giving freshly-published (possibly compromised) releases
