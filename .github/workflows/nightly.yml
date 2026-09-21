@@ -176,7 +176,18 @@ jobs:
       # version for the short sha before uploading.
       - name: Stamp artifact names with the commit sha
         run: |
-          for f in .output/*-"${NIGHTLY_VERSION}"-*.zip; do
+          set -euo pipefail
+          shopt -s nullglob
+          zips=(.output/*-"${NIGHTLY_VERSION}"-*.zip)
+          # An empty match means wxt named the zips something else: its templates default
+          # to the package version, which wxt.config.ts overrides back to the manifest one.
+          # Say so, rather than letting `mv` fail on the unexpanded glob.
+          if [ ${#zips[@]} -eq 0 ]; then
+            echo "::error::No .output zip is named for ${NIGHTLY_VERSION}; check zip.artifactTemplate in wxt.config.ts."
+            ls -1 .output/*.zip || true
+            exit 1
+          fi
+          for f in "${zips[@]}"; do
             mv "$f" "${f/-${NIGHTLY_VERSION}-/-nightly-${SHORT_SHA}-}"
           done
           ls -1 .output/*.zip
