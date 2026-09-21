@@ -29,8 +29,8 @@ const gitDirty = gitCommit !== '' && git('status', '--porcelain') !== '';
 
 // Version stamped into the manifest, overriding package.json when set. Both stores reject
 // a version they have already seen, and nightlies are built from a package version that
-// only moves on release, so CI hands every uploadable build its own version (nightlies get
-// a fourth component, `2.0.0.<run>`, which is monotonic and stays inside the four-part,
+// only moves on release, so CI hands every uploadable build its own version (nightlies put
+// the run number in the patch slot, `2.0.<run>`, which is monotonic and stays inside the
 // 0–65535-per-part format Chrome accepts). Unset locally and for release builds, where
 // package.json is the source of truth.
 const versionOverride = process.env.WXT_EXTENSION_VERSION;
@@ -88,6 +88,16 @@ export default defineConfig({
       },
     },
   }),
+  // Name the zips after the version in the manifest, not the one in package.json. WXT
+  // 0.21 switched the default templates from `{{version}}` to `{{packageVersion}}`, which
+  // makes every nightly zip claim the release version the package is still sitting on, so
+  // the two builds of a day are indistinguishable and the nightly workflow cannot find the
+  // artifacts it is about to stamp with the commit sha. Releases build straight from
+  // package.json, so the two templates agree there and pinning them costs nothing.
+  zip: {
+    artifactTemplate: '{{name}}-{{version}}-{{browser}}{{modeSuffix}}.zip',
+    sourcesTemplate: '{{name}}-{{version}}-sources{{modeSuffix}}.zip',
+  },
   // Build stamp constants, read through src/build-info.ts.
   vite: () => ({
     define: {
