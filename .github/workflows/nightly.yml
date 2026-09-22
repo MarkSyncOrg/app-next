@@ -92,7 +92,7 @@ jobs:
           cache: pnpm
           registry-url: https://npm.pkg.github.com
           scope: '@marksyncorg'
-      - run: pnpm install --no-frozen-lockfile
+      - run: pnpm install --frozen-lockfile
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
@@ -113,7 +113,7 @@ jobs:
           cache: pnpm
           registry-url: https://npm.pkg.github.com
           scope: '@marksyncorg'
-      - run: pnpm install --no-frozen-lockfile
+      - run: pnpm install --frozen-lockfile
 
       # The stores reject a version they have already accepted, so a nightly cannot ship
       # the package version — that one only moves on release. A nightly is the package's

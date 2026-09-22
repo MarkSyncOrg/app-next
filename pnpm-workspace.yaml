@@ -34,21 +34,22 @@
 patchedDependencies:
   lzutf8@0.6.3: patches/lzutf8@0.6.3.patch
 
-# HALF-CLOSED GAP. The lockfile used to carry no `patchedDependencies` section, so it
+# GAP CLOSED. The lockfile used to carry no `patchedDependencies` section, so it
 # disagreed with the block above and `pnpm install --frozen-lockfile` refused outright
-# with ERR_PNPM_LOCKFILE_CONFIG_MISMATCH. That half is done: the lockfile was regenerated
-# with a GitHub Packages token, it records the patch, and a frozen install now succeeds
-# from a clean node_modules.
+# with ERR_PNPM_LOCKFILE_CONFIG_MISMATCH. The lockfile was regenerated with a GitHub
+# Packages token, it records the patch, and a frozen install succeeds from a clean
+# node_modules. All seven workflow installs now pass `--frozen-lockfile`, so CI, nightly
+# and release alike build the tree that was reviewed rather than re-resolving it from the
+# registry, which matters most in the release job: that one builds what ships to the
+# stores.
 #
-# The other half is not. All seven workflow installs still pass `--no-frozen-lockfile`,
-# so CI, nightly and release alike re-resolve the tree from the registry instead of
-# building what was reviewed, and the release job is the one that builds what ships to
-# the stores. Moving them back to `--frozen-lockfile` is now a safe edit, with one
-# ordering constraint: it should land only once Dependabot has actually opened an npm
-# pull request here and updated this lockfile in it. Until that is observed, a Dependabot
-# pull request touching package.json without the lockfile would fail CI on the mismatch
-# rather than on anything real. No secret is involved any more; see the note in
-# .github/dependabot.yml for why the registry block there is deliberately absent.
+# The cost is that the lockfile is now a required part of every dependency change. A pull
+# request that edits package.json without it fails on ERR_PNPM_OUTDATED_LOCKFILE, which
+# is the point, but it does mean an automated bump has to carry both. Dependabot does
+# update pnpm lockfiles and can authenticate to npm.pkg.github.com with its own token
+# (see the note in .github/dependabot.yml for why no registry block is needed); if one of
+# its pull requests ever fails here on a lockfile mismatch, that is what to look at
+# first, not this setting. No secret is involved any more.
 
 # Dependency lifecycle scripts pnpm may run: none. pnpm blocks them by default, and the
 # two entries that used to sit here are both moot. esbuild needed its install script to
@@ -60,10 +61,11 @@ allowBuilds: {}
 
 # Supply-chain cooldown: never install a package version published less than 4 days ago
 # (4 * 24 * 60 = 5760 minutes), giving freshly-published (possibly compromised) releases
-# time to be caught before they enter the tree. It gates new resolutions, which is what
-# every CI, nightly and release install still performs while those installs pass
-# `--no-frozen-lockfile` (see the gap note above). So the cooldown remains, for now, the
-# only thing standing between a fresh upstream release and a build that ships.
+# time to be caught before they enter the tree. It gates resolutions, so with the frozen
+# installs above it no longer sits in the path of a build: what ships is whatever the
+# lockfile already records. Where it still does its job is the resolution that produces
+# that lockfile, here and in Dependabot (whose `cooldown: default-days: 4` matches it),
+# which is the moment a fresh upstream release would otherwise enter the tree.
 #
 # It also holds back versions this repo would otherwise take: today eslint 10.11.0 and
 # prettier 3.9.8 are both inside the window, which is why the manifest names 10.10.0 and

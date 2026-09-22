@@ -35,7 +35,7 @@ jobs:
           cache: pnpm
           registry-url: https://npm.pkg.github.com
           scope: '@marksyncorg'
-      - run: pnpm install --no-frozen-lockfile
+      - run: pnpm install --frozen-lockfile
       - name: Check formatting
         run: pnpm format:check
       - name: Lint
@@ -69,7 +69,7 @@ jobs:
           cache: pnpm
           registry-url: https://npm.pkg.github.com
           scope: '@marksyncorg'
-      - run: pnpm install --no-frozen-lockfile
+      - run: pnpm install --frozen-lockfile
       - name: Install Playwright Chromium
         run: pnpm exec playwright install --with-deps chromium
       - name: Build extension
@@ -96,7 +96,7 @@ jobs:
           cache: pnpm
           registry-url: https://npm.pkg.github.com
           scope: '@marksyncorg'
-      - run: pnpm install --no-frozen-lockfile
+      - run: pnpm install --frozen-lockfile
       # Gate on what actually ships in the extension bundle.
       - name: Audit (production deps)
         run: pnpm audit --prod --audit-level high

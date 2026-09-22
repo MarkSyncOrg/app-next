@@ -83,7 +83,7 @@ jobs:
           cache: pnpm
           registry-url: https://npm.pkg.github.com
           scope: '@marksyncorg'
-      - run: pnpm install --no-frozen-lockfile
+      - run: pnpm install --frozen-lockfile
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
@@ -110,7 +110,7 @@ jobs:
           cache: pnpm
           registry-url: https://npm.pkg.github.com
           scope: '@marksyncorg'
-      - run: pnpm install --no-frozen-lockfile
+      - run: pnpm install --frozen-lockfile
 
       # No WXT_EXTENSION_VERSION here, unlike the nightly: a release ships exactly the
       # version package.json declares, which is the one the tag was checked against.
