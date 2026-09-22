@@ -33,6 +33,9 @@ export type SyncRequest =
   | { type: 'disable' }
   | { type: 'getSettings' }
   | { type: 'setSettings'; settings: Partial<Settings> }
+  // How many local bookmarks this device is currently holding back from the sync, so
+  // the options page can say so instead of leaving the exclusion invisible.
+  | { type: 'getExcludedBookmarks' }
   | { type: 'getLog' }
   | { type: 'clearLog' }
   | { type: 'createBackup' }
@@ -69,6 +72,7 @@ export interface SyncResultData {
   disable: null;
   getSettings: Settings;
   setSettings: Settings;
+  getExcludedBookmarks: { count: number };
   getLog: LogEntry[];
   clearLog: null;
   createBackup: Backup;
@@ -94,6 +98,7 @@ const REQUEST_TYPES: readonly SyncRequestType[] = [
   'disable',
   'getSettings',
   'setSettings',
+  'getExcludedBookmarks',
   'getLog',
   'clearLog',
   'createBackup',

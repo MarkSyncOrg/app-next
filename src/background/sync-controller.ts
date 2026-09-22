@@ -1,5 +1,6 @@
 import { browser } from 'wxt/browser';
 import {
+  acceptBookmarkTreeWithReport,
   type Bookmark,
   BookmarkContainer,
   BookmarkMetadataStore,
@@ -356,6 +357,20 @@ export function initSyncController(): void {
         await applyAlarm();
         return settings;
       }
+      case 'getExcludedBookmarks':
+        return withLock('getExcludedBookmarks', async () => {
+          const { syncBookmarklets } = await store.getSettings();
+          const { removed } = acceptBookmarkTreeWithReport(await provider.getBookmarks(), {
+            allowBookmarklets: syncBookmarklets,
+          });
+          // A count, never the entries: their titles and URLs are exactly what the log
+          // must not carry, and the page only needs to say how many there are.
+          await log.debug('Counted bookmarks held back from the sync', {
+            excluded: removed.length,
+            syncBookmarklets,
+          });
+          return { count: removed.length };
+        });
       case 'getLog':
         return logStore.getEntries();
       case 'clearLog':

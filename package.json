@@ -29,7 +29,7 @@
     "format:check": "prettier --check ."
   },
   "dependencies": {
-    "@marksyncorg/core": "0.6.1"
+    "@marksyncorg/core": "0.7.0"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

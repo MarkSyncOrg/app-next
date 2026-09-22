@@ -67,6 +67,33 @@ declares whether this browser can hold separators at all (`holdsSeparators`) and
 are restored only where it cannot — on Firefox the tree it hands back is the truth, and
 deleting a separator there has to stick.
 
+#### Which addresses are synced
+
+Everything the browser can hold, with one exception. `http(s)`, `ftp(s)` and `mailto:`
+bookmarks are carried, and so are the local and browser-internal ones: `chrome://`,
+`edge://`, `brave://`, `vivaldi://`, `opera://`, `about:`, `file://` and the extension
+schemes. None of them executes anything in the page that lists it, and browsers already
+refuse to navigate to them from an ordinary page, so leaving them out of the sync
+protected nobody and silently cost users bookmarks they had (issue #37).
+
+The exception is bookmarklets: `javascript:` and `data:` addresses run whatever they
+contain in whichever context opens them, so a tree from a backup file or from anyone
+sharing the sync could otherwise plant one in the bookmark bar of every device. They stay
+on the device that holds them unless **Sync bookmarklets** is turned on, and the options
+page says how many bookmarks are currently being held back rather than leaving the
+exclusion invisible.
+
+Rendering is a separate question with a narrower answer, and the split lives in core
+(`isSyncableBookmarkUrl` against `isSafeBookmarkUrl`, see its SECURITY.md). Nothing here
+turns a bookmark into an `<a href>`; the page editor only ever shows the active tab's
+address as text.
+
+One consequence of carrying more: a browser may refuse an address through the bookmarks
+API even though the sync is happy to hold it: Firefox rejects `javascript:` and `data:`
+outright. Such a node is skipped with a log line and the rest of the tree is still
+applied, exactly as a separator Chromium cannot represent is. The cache is refreshed from
+what the browser turns out to hold, so the gap does not read as a local edit afterwards.
+
 #### Descriptions and tags
 
 The xBrowserSync bookmark model carries a `description` and `tags`, and no browser has
@@ -178,6 +205,8 @@ Settings:
 - **Auto-sync** — background sync interval (off / 15 / 30 / 60 min); drives the alarm.
 - **Sync bookmarks toolbar** — include the browser's toolbar/bar in the sync.
 - **Sync changes automatically** — push local bookmark edits as they happen.
+- **Sync bookmarklets**: upload `javascript:` and `data:` bookmarks too (off by
+  default). See [Which addresses are synced](#which-addresses-are-synced).
 - **Sync direction** — two-way (default), send only, or receive only; also asked for at
   setup. See [One-way sync](#one-way-sync).
 
