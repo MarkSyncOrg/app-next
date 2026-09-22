@@ -2,7 +2,7 @@ import { browser } from 'wxt/browser';
 import {
   DESCRIPTION_MAX_LENGTH,
   formatTags,
-  isSafeBookmarkUrl,
+  isSyncableBookmarkUrl,
   normalizeDescription,
   parseTags,
   renderSyncIdQrSvg,
@@ -462,10 +462,11 @@ let activePageBookmarked = false;
 async function readActivePage(): Promise<ActivePage | undefined> {
   const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
   const url = tab?.url;
-  // isSafeBookmarkUrl is the same check the sync applies, so the editor appears exactly
-  // when the page could actually be synced — never on about:/chrome:// pages, the
-  // extension's own pages, or anything else the sync would refuse to carry.
-  if (!url || !isSafeBookmarkUrl(url)) {
+  // isSyncableBookmarkUrl is the same check the sync applies, so the editor appears
+  // exactly when the page could actually be synced. That now includes the browser's own
+  // pages and file:// documents: they are carried like any other bookmark, they just
+  // have nothing to suggest a description from, which readPageMetadata already handles.
+  if (!url || !isSyncableBookmarkUrl(url)) {
     return undefined;
   }
   return { url, title: tab.title ?? url, tabId: tab.id };

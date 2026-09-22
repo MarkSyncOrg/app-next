@@ -119,6 +119,11 @@ const bookmarks = {
     if (details.title === '__FAIL__') {
       return Promise.reject(new Error('boom'));
     }
+    // Firefox refuses these outright, whatever the sync is carrying. Reproduced here so
+    // the apply path is tested against the browser that is strictest about addresses.
+    if (details.url?.startsWith('javascript:') || details.url?.startsWith('data:')) {
+      return Promise.reject(new Error('Invalid bookmark: url must be a valid URL'));
+    }
     // Only what a real native node can hold: no description, no tags.
     const node: FakeNode = {
       id: String((nextId += 1)),
@@ -526,6 +531,49 @@ describe('WebextBookmarkProvider write failures', () => {
     // Present on every failure, whatever it resolves to under this test's plain Node
     // environment — it is the identity Chrome and Edge don't otherwise let apart.
     expect(typeof failure?.context?.browser).toBe('string');
+  });
+});
+
+describe('WebextBookmarkProvider addresses the browser refuses', () => {
+  it('leaves the refused bookmark out and writes the rest of the tree', async () => {
+    const sink = new MemorySink();
+    const provider = new WebextBookmarkProvider({ logger: new Logger({ sinks: [sink] }) });
+
+    await provider.setBookmarks([
+      {
+        title: BookmarkContainer.Other,
+        children: [
+          { title: 'Before', url: 'https://before.org/' },
+          { title: 'Let', url: 'javascript:void(0)' },
+          { title: 'After', url: 'https://after.org/' },
+        ],
+      },
+    ]);
+
+    // The apply completed, and the two ordinary bookmarks landed in order: a refusal the
+    // browser is entitled to must not cost the user the rest of their tree.
+    expect(roots['2']!.children!.map((node) => node.url)).toEqual([
+      'https://before.org/',
+      'https://after.org/',
+    ]);
+    expect(
+      sink.entries.some(
+        (entry) => entry.message === 'Browser refused this address; leaving the bookmark out',
+      ),
+    ).toBe(true);
+  });
+
+  it('still fails the apply when an ordinary web address is refused', async () => {
+    const provider = new WebextBookmarkProvider({});
+
+    await expect(
+      provider.setBookmarks([
+        {
+          title: BookmarkContainer.Other,
+          children: [{ title: '__FAIL__', url: 'https://x.org/' }],
+        },
+      ]),
+    ).rejects.toThrow('boom');
   });
 });
 

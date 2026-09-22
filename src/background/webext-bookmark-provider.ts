@@ -6,6 +6,7 @@ import {
   type BookmarkMetadataStore,
   type BookmarkProvider,
   captureBookmarkMetadata,
+  isSafeBookmarkUrl,
   keyBookmarkSiblings,
   nativeToBookmarks,
   SEPARATOR_URL,
@@ -401,6 +402,24 @@ export class WebextBookmarkProvider implements BookmarkProvider {
       await this.reconcileChildren(folder.id, [], bookmark.children ?? [], change);
       return folder;
     } catch (error) {
+      // A browser may refuse an address the sync legitimately carries: Firefox rejects
+      // `javascript:` and `data:` outright, and the browser-internal schemes are each
+      // platform's own business. Losing that one node beats failing the whole apply and
+      // leaving the tree half-written, so it is skipped here. Nothing drifts as a
+      // result: the cache is refreshed from what the browser turns out to hold, the same
+      // way it is for a separator Chromium cannot represent.
+      //
+      // An ordinary web address is a different matter: a refusal there is quota, a
+      // vanished parent, something real, and it still stops the apply.
+      if (bookmark.url !== undefined && !isSafeBookmarkUrl(bookmark.url)) {
+        await this.log.warn('Browser refused this address; leaving the bookmark out', {
+          parentId,
+          origin: urlOrigin(bookmark.url),
+          browser: this.browserBrand,
+          errorMessage: (error as Error).message,
+        });
+        return undefined;
+      }
       await this.log.failure('Failed to create a bookmark', error, {
         parentId,
         parent: await this.describeForDiagnostics(parentId),

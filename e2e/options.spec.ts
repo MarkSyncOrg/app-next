@@ -113,3 +113,24 @@ test('the theme selector repaints the page and survives a reload', async ({
   await expect(popup.locator('html')).toHaveAttribute('data-theme', 'dark');
   await expect(popup.locator('body')).toHaveCSS('background-color', 'rgb(34, 34, 26)');
 });
+
+test('the bookmarklet toggle explains itself and persists', async ({ context, extensionId }) => {
+  const page = await context.newPage();
+  await page.goto(`chrome-extension://${extensionId}/options.html`);
+
+  // Off by default: letting a sync write an executable address into the bookmark bar is
+  // the user's decision to make, not ours.
+  const toggle = page.locator('#set-bookmarklets');
+  await expect(toggle).not.toBeChecked();
+  // And the hint says what still is synced, which is the part MarkSyncOrg/app-next#37
+  // was about: only bookmarklets stay behind now.
+  await expect(page.locator('#bookmarklet-hint')).toContainText('stay on this device');
+  await expect(page.locator('#bookmarklet-hint')).toContainText('chrome://');
+
+  await toggle.check();
+  await expect(page.locator('#bookmarklet-hint')).toContainText('uploaded with everything else');
+
+  // The setting reached the worker, not just the checkbox.
+  await page.reload();
+  await expect(page.locator('#set-bookmarklets')).toBeChecked();
+});

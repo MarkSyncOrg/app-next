@@ -16,6 +16,16 @@ import type { SyncRequest, SyncResponse, SyncResultData } from '../../src/messag
 const log = createUiLogger('options');
 
 /**
+ * What the sync carries beyond the default set, as the page last saw it.
+ *
+ * The restore below parses the backup file here rather than in the worker, so it needs
+ * the same URL policy the engine will apply: a user who syncs bookmarklets restores them
+ * too, and one who does not never writes an executable URL into their bookmarks by
+ * restoring a file someone sent them.
+ */
+let urlPolicy = { allowBookmarklets: false };
+
+/**
  * What each direction does, in the user's terms. Shown under the selector because the
  * option labels alone do not say what happens to changes made on the losing side.
  */
@@ -59,6 +69,8 @@ const message = el('message');
 const intervalSelect = el<HTMLSelectElement>('set-interval');
 const toolbarCheck = el<HTMLInputElement>('set-toolbar');
 const onChangeCheck = el<HTMLInputElement>('set-on-change');
+const bookmarkletCheck = el<HTMLInputElement>('set-bookmarklets');
+const bookmarkletHint = el('bookmarklet-hint');
 const directionSelect = el<HTMLSelectElement>('set-direction');
 const directionHint = el('direction-hint');
 const exportButton = el<HTMLButtonElement>('export-backup');
@@ -101,11 +113,55 @@ function renderSettings(settings: Settings): void {
   intervalSelect.value = String(settings.syncIntervalMinutes);
   toolbarCheck.checked = settings.syncBookmarksToolbar;
   onChangeCheck.checked = settings.syncOnChange;
+  bookmarkletCheck.checked = settings.syncBookmarklets;
+  urlPolicy = { allowBookmarklets: settings.syncBookmarklets };
+  renderBookmarkletHint();
   directionSelect.value = settings.syncDirection;
   directionHint.textContent = DIRECTION_HINTS[settings.syncDirection];
   // "Sync changes automatically" pushes, so it does nothing on a receive-only device.
   onChangeCheck.disabled = settings.syncDirection === 'pull-only';
   applyDirectionToRecovery(settings.syncDirection);
+}
+
+/**
+ * Explains the bookmarklet option, and says how many local bookmarks the device is
+ * currently keeping out of the sync.
+ *
+ * The count is what makes the exclusion honest: without it a user whose bookmarklets
+ * never reach their other devices has nothing to go on. It is asked for after the text
+ * is in place, so a worker that cannot answer leaves the explanation standing.
+ */
+function renderBookmarkletHint(): void {
+  const explanation = bookmarkletCheck.checked
+    ? 'Bookmarklets (javascript: and data: addresses) are uploaded with everything else. ' +
+      'They run whatever they contain when opened, so anyone who can write this sync can ' +
+      'put one in your bookmarks. Turn it on everywhere: a device that has it off removes ' +
+      'them from the sync the next time it uploads.'
+    : 'Bookmarklets (javascript: and data: addresses) stay on this device: they run whatever ' +
+      'they contain when opened, so they are not uploaded unless you ask. Everything else, ' +
+      'including chrome://, about: and file:// bookmarks, is synced.';
+  bookmarkletHint.textContent = explanation;
+  void showExcludedCount(explanation);
+}
+
+/**
+ * Adds "N bookmark(s) … are not being synced" to the hint, best-effort.
+ *
+ * Rebuilds the whole sentence from `explanation` rather than appending to what the
+ * element holds, so two renders racing each other cannot leave the count in twice, and a
+ * late answer to a superseded render is discarded rather than pasted onto the new text.
+ */
+async function showExcludedCount(explanation: string): Promise<void> {
+  try {
+    const { count } = await send({ type: 'getExcludedBookmarks' });
+    if (count > 0 && bookmarkletHint.textContent === explanation) {
+      bookmarkletHint.textContent = `${explanation} ${count} bookmark(s) on this device are not being synced.`;
+    }
+  } catch (error) {
+    await log.debug('Could not count the bookmarks held back from the sync', {
+      errorMessage: (error as Error).message,
+    });
+  }
 }
 
 async function saveSettings(update: Partial<Settings>): Promise<void> {
@@ -126,6 +182,9 @@ toolbarCheck.addEventListener('change', () => {
 });
 onChangeCheck.addEventListener('change', () => {
   void saveSettings({ syncOnChange: onChangeCheck.checked });
+});
+bookmarkletCheck.addEventListener('change', () => {
+  void saveSettings({ syncBookmarklets: bookmarkletCheck.checked });
 });
 directionSelect.addEventListener('change', () => {
   void saveSettings({ syncDirection: directionSelect.value as SyncDirection });
@@ -190,12 +249,13 @@ restoreButton.addEventListener('click', () => {
     try {
       // Parsing happens here (not in the worker) so a malformed file is reported
       // before anything touches the browser's bookmarks. `extractBookmarksWithReport`
-      // validates the shape and drops nodes whose URL would execute when opened — a
-      // backup file is the least trusted input in the system — and hands back what it
-      // dropped, which a restore cannot recover from the tree alone.
+      // validates the shape and drops nodes this device will not carry (a backup file
+      // is the least trusted input in the system) and hands back what it dropped, which
+      // a restore cannot recover from the tree alone. The policy is the device's own, so
+      // the file is filtered exactly as the engine is about to filter the result.
       const { bookmarks, removed } = await log.operation(
         'Parse backup file',
-        async () => extractBookmarksWithReport(parseBackup(await file.text())),
+        async () => extractBookmarksWithReport(parseBackup(await file.text()), urlPolicy),
         {
           context: { bytes: file.size },
           summarise: (parsed) => ({
@@ -206,8 +266,9 @@ restoreButton.addEventListener('click', () => {
       );
       if (removed.length > 0) {
         // Count only: the removed entries carry the titles and URLs the log must not.
-        await log.warn('Dropped bookmarks with an executable URL from the backup', {
+        await log.warn('Dropped bookmarks this device does not sync from the backup', {
           removed: removed.length,
+          allowBookmarklets: urlPolicy.allowBookmarklets,
         });
       }
       await log.operation('Restore backup', () => send({ type: 'restoreBackup', bookmarks }), {
@@ -218,7 +279,8 @@ restoreButton.addEventListener('click', () => {
       importFileLabel.textContent = 'No file selected';
       showMessage(
         removed.length > 0
-          ? `Backup restored. ${removed.length} bookmark(s) with an executable URL were skipped.`
+          ? `Backup restored. ${removed.length} bookmark(s) with an address this device does not ` +
+              'sync were skipped.'
           : 'Backup restored.',
       );
       await loadLog();
