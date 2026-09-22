@@ -83,6 +83,10 @@ on the device that holds them unless **Sync bookmarklets** is turned on, and the
 page says how many bookmarks are currently being held back rather than leaving the
 exclusion invisible.
 
+That setting belongs on every device or none: a device that has it off sanitises
+bookmarklets out of the tree it holds, so its next upload removes them from the sync for
+everyone. The same is true of any client that predates this option.
+
 Rendering is a separate question with a narrower answer, and the split lives in core
 (`isSyncableBookmarkUrl` against `isSafeBookmarkUrl`, see its SECURITY.md). Nothing here
 turns a bookmark into an `<a href>`; the page editor only ever shows the active tab's

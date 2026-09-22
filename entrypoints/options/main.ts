@@ -135,7 +135,8 @@ function renderBookmarkletHint(): void {
   const explanation = bookmarkletCheck.checked
     ? 'Bookmarklets (javascript: and data: addresses) are uploaded with everything else. ' +
       'They run whatever they contain when opened, so anyone who can write this sync can ' +
-      'put one in your bookmarks.'
+      'put one in your bookmarks. Turn it on everywhere: a device that has it off removes ' +
+      'them from the sync the next time it uploads.'
     : 'Bookmarklets (javascript: and data: addresses) stay on this device: they run whatever ' +
       'they contain when opened, so they are not uploaded unless you ask. Everything else, ' +
       'including chrome://, about: and file:// bookmarks, is synced.';
