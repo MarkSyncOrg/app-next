@@ -341,5 +341,6 @@ jobs:
           EDGE_CLIENT_ID: ${{ secrets.EDGE_CLIENT_ID }}
           EDGE_API_KEY: ${{ secrets.EDGE_API_KEY }}
           # Set the STORE_DRY_RUN repository variable to 'true' to exercise the whole
-          # pipeline — credentials included — without uploading anything.
-          DRY_RUN: ${{ vars.STORE_DRY_RUN }}
+          # pipeline, credentials included, without uploading anything. An unset variable
+          # must still become 'false': wxt submit rejects an empty dryRun.
+          DRY_RUN: ${{ vars.STORE_DRY_RUN || 'false' }}

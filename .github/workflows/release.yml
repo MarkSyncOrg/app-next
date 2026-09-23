@@ -201,7 +201,7 @@ jobs:
           EDGE_API_KEY: ${{ secrets.EDGE_API_KEY }}
           # A manual run defaults to a dry run; the STORE_DRY_RUN repository variable
           # forces one for tag pushes too.
-          DRY_RUN: ${{ (inputs.dry_run && 'true') || vars.STORE_DRY_RUN }}
+          DRY_RUN: ${{ (inputs.dry_run && 'true') || vars.STORE_DRY_RUN || 'false' }}
 
       # Same shape as the nightly: assets can only be attached while the release is a
       # draft, and a published release can never be modified, so create then flip.
