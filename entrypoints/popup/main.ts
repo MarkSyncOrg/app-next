@@ -12,8 +12,10 @@ import {
 import { buildDescription, currentBuild, versionLabel } from '../../src/build-info';
 import { createUiLogger } from '../../src/logging/ui-logger';
 import { type SetupMode, setupDirectionHint } from '../../src/setup-direction';
+import { clearSetupDraft, loadSetupDraft, saveSetupDraft } from '../../src/setup-draft';
 import { applyTheme } from '../../src/theme';
 import type { SyncRequest, SyncResponse, SyncResultData } from '../../src/messaging';
+import { browserStorageArea } from '../../src/webext/browser-storage-area';
 import { HostPermissionGate } from '../../src/webext/host-permission';
 import { readPageMetadata } from '../../src/webext/page-metadata';
 
@@ -124,6 +126,45 @@ function renderSetupDirectionHint(): void {
   const hint = setupDirectionHint(selectedMode(), selectedSetupDirection());
   setupDirectionHintText.textContent = hint ?? '';
   setupDirectionHintText.hidden = hint === null;
+}
+
+// `session`, not `local`: the draft can hold a freshly generated password, and it only
+// needs to survive the popup closing, not the browser restarting.
+const setupDraftStorage = browserStorageArea('session');
+
+/** Saves the setup form's current fields, so switching away and back does not lose them. */
+function saveSetupFormDraft(): void {
+  void saveSetupDraft(setupDraftStorage, {
+    serviceUrl: serviceUrlInput.value,
+    mode: selectedMode(),
+    syncId: syncIdInput.value,
+    password: passwordInput.value,
+    direction: selectedSetupDirection(),
+  });
+}
+
+/**
+ * Restores a setup draft saved before the popup last closed. Firefox (and Chrome) close
+ * an action popup the instant it loses focus, which happens to be exactly when the user
+ * switches away to copy a generated sync ID or password out of a password manager — see
+ * https://github.com/MarkSyncOrg/app-next/issues/41.
+ */
+async function restoreSetupFormDraft(): Promise<void> {
+  const draft = await loadSetupDraft(setupDraftStorage);
+  if (!draft) {
+    return;
+  }
+  serviceUrlInput.value = draft.serviceUrl;
+  setupModeSelect.value = draft.mode;
+  syncIdField.hidden = selectedMode() !== 'existing';
+  syncIdInput.value = draft.syncId;
+  passwordInput.value = draft.password;
+  setupDirectionSelect.value = draft.direction;
+  renderSetupDirectionHint();
+  await log.debug('Restored the setup form the popup had before it closed', {
+    mode: draft.mode,
+    passwordRestored: draft.password.length > 0,
+  });
 }
 
 function formatTimestamp(iso: string | undefined): string {
@@ -669,13 +710,22 @@ async function withBusy(
 setupModeSelect.addEventListener('change', () => {
   syncIdField.hidden = selectedMode() !== 'existing';
   renderSetupDirectionHint();
+  saveSetupFormDraft();
   void log.debug('Setup mode changed', { mode: selectedMode() });
 });
 
 setupDirectionSelect.addEventListener('change', () => {
   renderSetupDirectionHint();
+  saveSetupFormDraft();
   void log.debug('Setup direction changed', { direction: selectedSetupDirection() });
 });
+
+// Saved on every keystroke rather than debounced: storage.session is in memory, so there
+// is no disk I/O to spare it from, and the whole point is that a blur can end the popup
+// at any moment (see restoreSetupFormDraft).
+serviceUrlInput.addEventListener('input', saveSetupFormDraft);
+syncIdInput.addEventListener('input', saveSetupFormDraft);
+passwordInput.addEventListener('input', saveSetupFormDraft);
 
 setupForm.addEventListener('submit', (event) => {
   event.preventDefault();
@@ -711,6 +761,7 @@ setupForm.addEventListener('submit', (event) => {
       showMessage('Sync enabled.');
     }
     passwordInput.value = '';
+    await clearSetupDraft(setupDraftStorage);
     await render();
   });
 });
@@ -763,6 +814,9 @@ async function init(): Promise<void> {
   // still the one the user means, and setup is where they would otherwise re-pick it.
   setupDirectionSelect.value = settings.syncDirection;
   renderSetupDirectionHint();
+  // A saved draft wins over that default: it reflects what the user was actually typing
+  // before the popup closed on them.
+  await restoreSetupFormDraft();
   await render();
 }
 
