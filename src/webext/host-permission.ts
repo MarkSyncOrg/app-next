@@ -50,6 +50,19 @@ export class HostPermissionGate {
   }
 
   /**
+   * Whether `serviceUrl`'s origin is already granted, per the last {@link refresh}
+   * snapshot. Never requests anything, so it is safe to call outside a user gesture
+   * (e.g. to decide whether to resume something on popup open).
+   */
+  has(serviceUrl: string): boolean {
+    try {
+      return this.granted.includes(serviceOrigin(serviceUrl));
+    } catch {
+      return false;
+    }
+  }
+
+  /**
    * Ensures the extension may reach `serviceUrl`, requesting the host permission when
    * it is not held yet. Call it directly from the event handler of the user action that
    * needs it, before awaiting anything — see the class comment.

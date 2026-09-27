@@ -12,7 +12,12 @@ import {
 import { buildDescription, currentBuild, versionLabel } from '../../src/build-info';
 import { createUiLogger } from '../../src/logging/ui-logger';
 import { type SetupMode, setupDirectionHint } from '../../src/setup-direction';
-import { clearSetupDraft, loadSetupDraft, saveSetupDraft } from '../../src/setup-draft';
+import {
+  clearSetupDraft,
+  loadSetupDraft,
+  saveSetupDraft,
+  type SetupDraft,
+} from '../../src/setup-draft';
 import { applyTheme } from '../../src/theme';
 import type { SyncRequest, SyncResponse, SyncResultData } from '../../src/messaging';
 import { browserStorageArea } from '../../src/webext/browser-storage-area';
@@ -96,8 +101,10 @@ const hostPermissions = new HostPermissionGate(browser.permissions, log);
 // (see HostPermissionGate), so the snapshot of what is already granted has to be in
 // place before the form can be submitted. Read as the popup opens, independently of the
 // status round-trip in init(): a sleeping worker must not keep setup from starting.
+// Kept around (rather than a bare `void`) so init() can wait on the same snapshot before
+// deciding whether an interrupted setup is now resumable — see resumeInterruptedSetup().
 enableButton.disabled = true;
-void hostPermissions.refresh().finally(() => {
+const hostPermissionsReady = hostPermissions.refresh().finally(() => {
   enableButton.disabled = false;
 });
 
@@ -727,44 +734,101 @@ serviceUrlInput.addEventListener('input', saveSetupFormDraft);
 syncIdInput.addEventListener('input', saveSetupFormDraft);
 passwordInput.addEventListener('input', saveSetupFormDraft);
 
-setupForm.addEventListener('submit', (event) => {
-  event.preventDefault();
-  clearMessage();
-  const serviceUrl = serviceUrlInput.value.trim();
-  // Asked for here rather than inside the async action below: Firefox only accepts
-  // permissions.request() while it is still handling this submit event, and everything
-  // in withBusy() — including the first log line — resolves in a later task. The result
-  // is awaited there, so a denial still surfaces as an error message.
-  const permission = hostPermissions.ensure(serviceUrl);
-  void withBusy('Enable sync', enableButton, async () => {
-    const password = passwordInput.value;
+/**
+ * Sends the enable request for `draft` and reports the result, shared by a live form
+ * submission and {@link resumeInterruptedSetup}. `permission` is awaited rather than
+ * required up front so the live submission can still fire `hostPermissions.ensure()`
+ * synchronously from the submit event (see the listener below).
+ */
+async function submitSetup(draft: SetupDraft, permission: Promise<void>): Promise<void> {
+  const { serviceUrl, mode, syncId, password, direction } = draft;
+  try {
     // Never log the password itself — only whether one was entered.
-    const direction = selectedSetupDirection();
     await log.info('Setup submitted', {
-      mode: selectedMode(),
+      mode,
       serviceUrl,
       passwordProvided: password.length > 0,
       direction,
     });
     await permission;
-    if (selectedMode() === 'new') {
-      const { syncId } = await send({ type: 'enableNewSync', serviceUrl, password, direction });
-      showMessage(`Sync created. Save this sync ID to add other devices: ${syncId}`);
+    if (mode === 'new') {
+      const result = await send({ type: 'enableNewSync', serviceUrl, password, direction });
+      showMessage(`Sync created. Save this sync ID to add other devices: ${result.syncId}`);
     } else {
-      await send({
-        type: 'enableExistingSync',
-        serviceUrl,
-        syncId: syncIdInput.value.trim(),
-        password,
-        direction,
-      });
+      await send({ type: 'enableExistingSync', serviceUrl, syncId, password, direction });
       showMessage('Sync enabled.');
     }
     passwordInput.value = '';
     await clearSetupDraft(setupDraftStorage);
     await render();
-  });
+  } catch (error) {
+    // Reaching this catch means the popup survived long enough to see the failure (a
+    // denied permission, a wrong password, an unreachable service) rather than being
+    // closed by the browser mid-request. That is a real failure, not the interruption
+    // resumeInterruptedSetup exists for, so stop treating this draft as resumable —
+    // otherwise the next popup open would silently retry the same bad password forever.
+    // The fields themselves are kept, exactly as an unsuccessful attempt always has been.
+    await saveSetupDraft(setupDraftStorage, { ...draft, pending: false });
+    throw error;
+  }
+}
+
+setupForm.addEventListener('submit', (event) => {
+  event.preventDefault();
+  clearMessage();
+  const draft: SetupDraft = {
+    serviceUrl: serviceUrlInput.value.trim(),
+    mode: selectedMode(),
+    syncId: syncIdInput.value.trim(),
+    password: passwordInput.value,
+    direction: selectedSetupDirection(),
+    pending: true,
+  };
+  // Written synchronously, before anything async: on Chrome and Firefox alike, the
+  // browser's own permission prompt for a custom service takes focus away from the
+  // action popup exactly like any other blur, which closes it — cutting the request off
+  // before enableNewSync/enableExistingSync ever runs, even though the permission grant
+  // itself, being a browser-level decision, still goes through. Saving the pending draft
+  // now is what lets resumeInterruptedSetup finish the job on the next popup open.
+  void saveSetupDraft(setupDraftStorage, draft);
+  // Asked for here rather than inside the async action below: Firefox only accepts
+  // permissions.request() while it is still handling this submit event, and everything
+  // in withBusy() — including the first log line — resolves in a later task. The result
+  // is awaited there, so a denial still surfaces as an error message.
+  const permission = hostPermissions.ensure(draft.serviceUrl);
+  void withBusy('Enable sync', enableButton, () => submitSetup(draft, permission));
 });
+
+/**
+ * Finishes an "Enable sync" that the browser's permission prompt cut short instead of
+ * leaving the user staring at a form that looks like nothing happened — see the comment
+ * on the submit listener above for why that prompt interrupts it in the first place.
+ *
+ * Only acts on a draft the submit handler itself marked `pending`, and only once the
+ * permission it was waiting on is confirmed granted: a draft can just as well be one the
+ * user is still typing and never submitted, and auto-enabling on that would fire without
+ * a click. `submitSetup`'s own catch turns `pending` back off after any real failure, so
+ * this cannot loop on a bad password every time the popup opens.
+ */
+async function resumeInterruptedSetup(): Promise<void> {
+  const draft = await loadSetupDraft(setupDraftStorage);
+  await hostPermissionsReady;
+  if (!draft?.pending || !hostPermissions.has(draft.serviceUrl)) {
+    return;
+  }
+  const status = await send({ type: 'getStatus' });
+  if (status.enabled) {
+    // Enabled some other way already (e.g. finished from another popup open); the flag
+    // is stale.
+    await clearSetupDraft(setupDraftStorage);
+    return;
+  }
+  await log.debug('Resuming a setup the permission prompt interrupted', {
+    mode: draft.mode,
+    serviceUrl: draft.serviceUrl,
+  });
+  await withBusy('Enable sync', enableButton, () => submitSetup(draft, Promise.resolve()));
+}
 
 el<HTMLButtonElement>('sync-now').addEventListener('click', () => {
   const button = el<HTMLButtonElement>('sync-now');
@@ -817,6 +881,7 @@ async function init(): Promise<void> {
   // A saved draft wins over that default: it reflects what the user was actually typing
   // before the popup closed on them.
   await restoreSetupFormDraft();
+  await resumeInterruptedSetup();
   await render();
 }
 
