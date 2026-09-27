@@ -10,6 +10,14 @@ import type { SetupMode } from './setup-direction';
  * (https://github.com/MarkSyncOrg/app-next/issues/41). The popup saves this on every
  * change and restores it when it reopens, so that switching away and back does not throw
  * away what was typed.
+ *
+ * The same popup-closes-on-blur behaviour also fires the instant the browser shows its
+ * own "allow this site?" prompt for a custom service, since that prompt takes focus away
+ * from the popup too — but there the permission grant itself still goes through at the
+ * browser level, only the popup's own JavaScript (and the enable request it was about to
+ * send) gets cut off. `pending` marks a draft saved right before that request, so the
+ * next popup open can tell "submitted, then interrupted" apart from "still being typed"
+ * and finish the job instead of leaving the user staring at a form that looks untouched.
  */
 export interface SetupDraft {
   serviceUrl: string;
@@ -17,6 +25,7 @@ export interface SetupDraft {
   syncId: string;
   password: string;
   direction: SyncDirection;
+  pending?: boolean;
 }
 
 const STORAGE_KEY = 'setupDraft';

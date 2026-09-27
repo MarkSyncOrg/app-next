@@ -114,4 +114,42 @@ describe('HostPermissionGate', () => {
 
     expect(calls).toEqual(['getAll']);
   });
+
+  describe('has', () => {
+    it('reports a granted origin without touching permissions', async () => {
+      const { api, calls } = fakePermissions({ granted: ['https://sync.example.com/*'] });
+      const gate = new HostPermissionGate(api);
+      await gate.refresh();
+      calls.length = 0;
+
+      expect(gate.has('https://sync.example.com')).toBe(true);
+      expect(calls).toEqual([]);
+    });
+
+    it('reports an origin not yet granted', async () => {
+      const { api } = fakePermissions();
+      const gate = new HostPermissionGate(api);
+      await gate.refresh();
+
+      expect(gate.has('https://sync.example.com')).toBe(false);
+    });
+
+    it('reflects a grant recorded by a previous ensure() call', async () => {
+      const { api } = fakePermissions();
+      const gate = new HostPermissionGate(api);
+      await gate.refresh();
+
+      await gate.ensure('https://sync.example.com');
+
+      expect(gate.has('https://sync.example.com')).toBe(true);
+    });
+
+    it('returns false for an unusable service URL instead of throwing', async () => {
+      const { api } = fakePermissions();
+      const gate = new HostPermissionGate(api);
+      await gate.refresh();
+
+      expect(gate.has('not a url')).toBe(false);
+    });
+  });
 });
