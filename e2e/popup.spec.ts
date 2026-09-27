@@ -72,3 +72,26 @@ test('setup form offers a sync direction and explains the first exchange', async
   await page.selectOption('#setup-direction', 'push-only');
   await expect(page.locator('#setup-direction-hint')).toContainText('replaces the bookmarks');
 });
+
+test('setup form survives the popup closing and reopening', async ({ context, extensionId }) => {
+  // Firefox (and Chrome) close an action popup the instant it loses focus — including
+  // when the user switches away to copy a sync ID or password out of a password
+  // manager. Closing this page and opening a fresh one stands in for that:
+  // https://github.com/MarkSyncOrg/app-next/issues/41.
+  const first = await context.newPage();
+  await first.goto(`chrome-extension://${extensionId}/popup.html`);
+  await first.fill('#service-url', 'https://sync.example.com');
+  await first.selectOption('#setup-mode', 'existing');
+  await first.fill('#sync-id', 'abc123');
+  await first.fill('#password', 'correct-horse-battery-staple');
+  await first.selectOption('#setup-direction', 'pull-only');
+  await first.close();
+
+  const second = await context.newPage();
+  await second.goto(`chrome-extension://${extensionId}/popup.html`);
+  await expect(second.locator('#service-url')).toHaveValue('https://sync.example.com');
+  await expect(second.locator('#setup-mode')).toHaveValue('existing');
+  await expect(second.locator('#sync-id')).toHaveValue('abc123');
+  await expect(second.locator('#password')).toHaveValue('correct-horse-battery-staple');
+  await expect(second.locator('#setup-direction')).toHaveValue('pull-only');
+});
