@@ -50,11 +50,11 @@ describe('HostPermissionGate', () => {
   it('does not ask again for a host granted at install', async () => {
     // The official service is a manifest host permission, so the popup must not prompt
     // for it — this is the path that kept working on Firefox while custom ones failed.
-    const { api, calls } = fakePermissions({ granted: ['https://api.xbrowsersync.org/*'] });
+    const { api, calls } = fakePermissions({ granted: ['https://sync.marksync.org/*'] });
     const gate = new HostPermissionGate(api);
     await gate.refresh();
 
-    await gate.ensure('https://api.xbrowsersync.org');
+    await gate.ensure('https://sync.marksync.org');
 
     expect(calls).toEqual(['getAll']);
   });

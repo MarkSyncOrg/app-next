@@ -42,7 +42,7 @@ Please complete the following information for all affected browsers:
 - MarkSync version [e.g. 2.0.0]
 
 **Sync service**
-- Service URL [e.g. https://api.xbrowsersync.org, or self-hosted]
+- Service URL [e.g. https://sync.marksync.org, or self-hosted]
 
 **Application log**
 Please include the logs from the affected clients:

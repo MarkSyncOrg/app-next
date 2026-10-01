@@ -61,9 +61,9 @@ export default defineConfig({
     // deliberately narrower than xBrowserSync, which asks for optional access to every
     // http(s) site so it can also scrape from the background when a bookmark is starred.
     permissions: ['storage', 'bookmarks', 'alarms', 'activeTab', 'scripting'],
-    // The official service. Self-hosted/custom service URLs are requested at runtime
+    // The MarkSync service (default) plus the legacy xBrowserSync one, so existing syncs keep working. Self-hosted/custom service URLs are requested at runtime
     // via optional host permissions so users only grant what they actually use.
-    host_permissions: ['https://api.xbrowsersync.org/*', ...(extraHost ? [extraHost] : [])],
+    host_permissions: ['https://sync.marksync.org/*', 'https://api.xbrowsersync.org/*', ...(extraHost ? [extraHost] : [])],
     // MV2 (the Firefox target) has no `optional_host_permissions`; Gecko reads optional
     // host patterns from `optional_permissions`. Emitting the MV3 key there makes it
     // vanish from the built manifest, and `permissions.request()` then rejects every
