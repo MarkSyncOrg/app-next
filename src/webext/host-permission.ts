@@ -15,7 +15,7 @@ export function serviceOrigin(serviceUrl: string): string {
 /**
  * Grants the extension access to a custom (self-hosted or third-party) service.
  *
- * Only `https://api.xbrowsersync.org/*` is granted at install; every other service is
+ * Only `https://sync.marksync.org/*` (and the legacy `https://api.xbrowsersync.org/*`) is granted at install; every other service is
  * covered by the optional wildcard host pattern (any https origin) and has to be granted
  * by the user when they enable sync against it.
  *

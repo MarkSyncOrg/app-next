@@ -7,7 +7,7 @@ test('popup shows the setup form when sync is not enabled', async ({ context, ex
   // The setup form is shown only after the popup queries status from the worker,
   // so this also exercises the popup<->background messaging round-trip.
   await expect(page.locator('#setup')).toBeVisible();
-  await expect(page.locator('#service-url')).toHaveValue('https://api.xbrowsersync.org');
+  await expect(page.locator('#service-url')).toHaveValue('https://sync.marksync.org');
   await expect(page.locator('#status')).toBeHidden();
 });
 
