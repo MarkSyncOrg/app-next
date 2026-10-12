@@ -67,9 +67,9 @@ allowBuilds: {}
 # that lockfile, here and in Dependabot (whose `cooldown: default-days: 4` matches it),
 # which is the moment a fresh upstream release would otherwise enter the tree.
 #
-# It also holds back versions this repo would otherwise take: today eslint 10.11.0 and
-# prettier 3.9.8 are both inside the window, which is why the manifest names 10.10.0 and
-# 3.9.6. That is the cooldown working, not a stale pin.
+# It also holds back versions this repo would otherwise take: a release newer than the
+# manifest pin (prettier 3.9.10 at the time of writing) can sit inside the window. That is
+# the cooldown working, not a stale pin.
 minimumReleaseAge: 5760
 
 # Exempt our own first-party package from the cooldown: it is published by us to a
