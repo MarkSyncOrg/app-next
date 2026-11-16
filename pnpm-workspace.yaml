@@ -1,6 +1,7 @@
 # pnpm settings (pnpm 11 reads project config from here, not the package.json "pnpm" field).
 
-# No `overrides` block, and that is a result rather than an oversight. Every pin this
+# No standing `overrides` block, and that is a result rather than an oversight (the one pin
+# below is temporary and says when to drop it). Every pin this
 # file used to carry is gone, checked one at a time by emptying the block and re-running
 # `pnpm audit`:
 #
@@ -23,6 +24,22 @@
 #
 # So: before adding a pin, empty this space and run `pnpm audit`. A dependency bump that
 # removes the vulnerable subtree beats a pin that has to be re-read every round.
+
+# One temporary pin, because the bump that would replace it is still inside the cooldown
+# below. minimatch 10.x carries GHSA-g3hv-75wg-m249 (moderate, globparts amplification
+# DoS; patched in 11.0.1) and reaches the tree through eslint, @eslint/config-array and
+# @typescript-eslint/typescript-estree. The first releases that move those to minimatch
+# ^11 are eslint 10.15.0 (2026-11-13, with @eslint/config-array 0.23.6) and
+# typescript-eslint 8.73.0 (2026-11-16); both are younger than minimumReleaseAge, so pnpm
+# will not resolve them yet. The `@10` selector only rewrites the 10.x line. All three
+# consumers use the stable surface (`new Minimatch().match()` / `minimatch()`), none of
+# the APIs minimatch 11 removed (makeRe, AST, debug, matchOne), and `eslint .` lints the
+# same 36 files clean either way.
+#
+# REMOVE once eslint >= 10.15.0 and typescript-eslint >= 8.73.0 clear the cooldown: bump
+# both, delete this block, and `pnpm audit` should stay clean with no override.
+overrides:
+  minimatch@10: ^11.0.5
 
 # lzutf8 (transitive, via @marksyncorg/core) writes its optional debug output with
 # `document.body.innerHTML += …`. The branch is dead here — nothing ever asks it to log
